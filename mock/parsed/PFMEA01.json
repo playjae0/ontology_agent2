@@ -1,0 +1,75 @@
+{
+  "doc_id": "PFMEA01",
+  "doc_type": "pfmea",
+  "source_path": "(mock)",
+  "revision": "R1",
+  "parsed_at": "2026-01-03T00:00:00",
+  "parser_version": "mock-0.1",
+  "context": {"model": "M1"},
+  "payload_kind": "table",
+  "records": [
+    { "chunk_id": "PFMEA01-R1", "process_group": "조립", "process_ref": "노칭", "electrode_type": "cathode",
+      "failure_mode": "전극 치수 불량", "cause": "금형 마모", "effect_category": "방전기능상실", "severity": 8,
+      "control_item_for_cause": "금형 클리어런스",
+      "prevention_control": "금형 마모 주기를 관리하고 예방 교체한다.", "detection_control": "타발 치수를 전수 비전 검사한다." },
+
+    { "chunk_id": "PFMEA01-R2", "process_group": "조립", "process_ref": "노칭", "electrode_type": "anode",
+      "failure_mode": "전극 치수 불량", "cause": "타발 속도 과다", "effect_category": "방전기능상실", "severity": 8,
+      "control_item_for_cause": "타발 속도",
+      "prevention_control": "타발 속도 상한을 설정한다.", "detection_control": "치수 샘플 검사." },
+
+    { "chunk_id": "PFMEA01-R3", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "failure_mode": "절연 파괴", "cause": "이물 유입", "effect_category": "단락", "severity": 9,
+      "control_item_for_cause": "이물 검출 감도",
+      "prevention_control": "청정도를 관리한다.", "detection_control": "절연 저항을 측정한다." },
+
+    { "chunk_id": "PFMEA01-R4", "process_group": "조립", "process_ref": "스태킹", "electrode_type": "cathode",
+      "failure_mode": "내부 단락", "cause": "절연 파괴", "effect_category": "단락", "severity": 9,
+      "prevention_control": "정렬 정밀도를 관리한다.", "detection_control": "내부 단락 검사." },
+
+    { "chunk_id": "PFMEA01-R5", "process_group": "조립", "process_ref": "스태킹", "electrode_type": "anode",
+      "failure_mode": "적층 어긋남", "cause": "정렬 센서 오차", "effect_category": "충전기능상실", "severity": 7,
+      "control_item_for_cause": "적층 정렬도",
+      "prevention_control": "정렬 센서를 정기 교정한다.", "detection_control": "적층 정렬도 검사." },
+
+    { "chunk_id": "PFMEA01-R6", "process_group": "조립", "process_ref": "스태킹", "electrode_type": "both",
+      "failure_mode": "적층 어긋남", "cause": "흡착 불량", "effect_category": "충전기능상실", "severity": 7,
+      "control_item_for_cause": "흡착 압력",
+      "prevention_control": "흡착 압력을 관리한다.", "detection_control": "적층 상태 검사." },
+
+    { "chunk_id": "PFMEA01-R7", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "cathode",
+      "failure_mode": "용접 강도 부족", "cause": "가압력 부족", "effect_category": "방전기능상실", "severity": 8,
+      "control_item_for_cause": "용접 가압력",
+      "prevention_control": "가압력을 관리한다.", "detection_control": "용접 강도 시험." },
+
+    { "chunk_id": "PFMEA01-R8", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "anode",
+      "failure_mode": "용접 강도 부족", "cause": "진폭 이상", "effect_category": "방전기능상실", "severity": 8,
+      "control_item_for_cause": "용접 진폭",
+      "prevention_control": "진폭을 모니터링한다.", "detection_control": "용접 강도 시험." },
+
+    { "chunk_id": "PFMEA01-R9", "process_group": "조립", "process_ref": "패키징", "electrode_type": "both",
+      "failure_mode": "실링 파단", "cause": "실링 온도 저하", "effect_category": "셀 부풀음", "severity": 7,
+      "control_item_for_cause": "실링 온도",
+      "prevention_control": "실링 온도를 관리한다.", "detection_control": "외관 검사." },
+
+    { "chunk_id": "PFMEA01-R10", "process_group": "조립", "process_ref": "전해액주입", "electrode_type": "cathode",
+      "failure_mode": "주액량 편차", "cause": "주액 노즐 막힘", "effect_category": "충전기능상실", "severity": 7,
+      "control_item_for_cause": "주액량",
+      "prevention_control": "노즐 청소 주기를 관리한다.", "detection_control": "주액량 계측." },
+
+    { "chunk_id": "PFMEA01-R11", "process_group": "조립", "process_ref": "실링", "electrode_type": "anode",
+      "failure_mode": "밀봉 불량", "cause": "이물 유입", "effect_category": "화재", "severity": 9,
+      "control_item_for_cause": "이물 검출 감도",
+      "prevention_control": "청정도를 관리한다.", "detection_control": "밀봉 상태 검사." },
+
+    { "chunk_id": "PFMEA01-R12", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "failure_mode": "버 발생", "cause": "금형 마모", "effect_category": "단락", "severity": 9,
+      "control_item_for_cause": "노칭정밀도", "비고": "재발 이력 있음",
+      "prevention_control": "금형을 연마한다.", "detection_control": "버 높이를 검사한다." },
+
+    { "chunk_id": "PFMEA01-R13", "process_group": "조립", "process_ref": "레이저노칭", "electrode_type": "cathode",
+      "failure_mode": "슬리팅 버", "cause": "빔 출력 편차", "effect_category": "단락", "severity": 9,
+      "control_item_for_cause": "빔 출력",
+      "prevention_control": "빔 출력을 안정화한다.", "detection_control": "버 검사." }
+  ]
+}

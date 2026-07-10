@@ -63,20 +63,21 @@ def route(question, project_root=PROJECT_ROOT, data_root=None):
             per_layer.setdefault(n["layer"], []).append(nid)
 
     all_facts, all_chunks, truncated_any = [], [], False
-    scopes = {}
+    all_scope = set()
     for layer, ids in per_layer.items():
         cfg = s.layers_cfg[layer]
         g = s.graphs[layer]
         expanded = query.flow_scope(cfg, g) if is_flow else query.expand(ids, cfg, g)
         scope = set(ids) | set(expanded)
-        scopes[layer] = (g, scope, cfg)
+        all_scope |= scope
         all_facts += query.graph_facts(scope, g, cfg)
         cids, trunc = query.collect_chunks(ids, expanded, s.chunks)
         all_chunks += cids
         truncated_any = truncated_any or trunc
 
-    # cross-layer 브리지 1홉 (명세 §8-6·§8-R1) — config.cross_layer_traverse 보유 층에서 층을 넘음
-    _bridge(scopes, s, all_facts)
+    # cross-layer 브리지 1홉 (명세 §8-6·§8-R1) — cross_layer_traverse 보유 층 그래프를
+    # 전역 scope로 시딩해 층을 넘는다(역방향 포함: 공정 노드 → 그를 dst로 하는 Failure).
+    _bridge(all_scope, s, all_facts)
 
     linking_miss = len(linked) == 0
     if linking_miss:
@@ -103,15 +104,41 @@ def _node(s, node_id):
     return None
 
 
-def _bridge(scopes, s, all_facts):
-    """cross-layer 1홉 브리지 — 상위층(cross_layer_traverse 보유)에서 타 층 노드로 뻗어 사실 추가."""
-    for layer, (g, scope, cfg) in scopes.items():
+class _AllGraphsView:
+    """전 층 노드·엣지 병합 읽기 뷰 — cross-layer 사실 문장화용(canonical은 전역 id라 전역 조회, §8-R3).
+
+    graph_facts가 dst 노드의 canonical을 다른 층에서도 찾게 한다(occurs_in 등 cross-layer 엣지).
+    엣지 채널은 병합하되 문장화는 넘겨받은 상위층 fact_templates가 결정하므로(§8-R4) 타 층 관계는 무템플릿→자동 제외.
+    """
+
+    def __init__(self, graphs):
+        self.nodes = {}
+        self.edges = []
+        for g in graphs.values():
+            self.nodes.update(g.nodes)
+            self.edges += g.edges
+
+    def edges_incident(self, ids):
+        idset = set(ids)
+        return [e for e in self.edges
+                if e.get("status") != "deleted_by_user"
+                and (e["src"] in idset or e["dst"] in idset)]
+
+
+def _bridge(all_scope, s, all_facts):
+    """cross-layer 1홉 브리지 — cross_layer_traverse 보유 층(상위층) 그래프에서 층을 넘음.
+
+    cross-layer 엣지는 상위층 그래프에 저장(src=상위층, dst=하위층, 명세 §8-4). 전역 scope로 시딩해
+    양방향 1홉 이웃을 찾고(정방향: Failure→Process, 역방향: Process→Failure), 상위층 fact_templates로
+    문장화(§8-R4). 노이즈는 답변 LLM의 관련성 필터가 통제(§8-6) — MOCK은 나열만.
+    """
+    view = _AllGraphsView(s.graphs)                     # 전역 canonical 해소용
+    for layer, cfg in s.layers_cfg.items():
         clt = cfg.get("cross_layer_traverse")
         if not clt:
             continue
-        bridged = g.neighbors(scope, clt)               # 타 층 노드 id (전역 id, dst)
-        # 브리지 엣지의 문장화는 상위층 fact_templates 사용(§8-R4) — scope에 브리지 엣지 포함해 재문장화
-        for line in query.graph_facts(scope | bridged, g, cfg):
+        bridged = s.graphs[layer].neighbors(all_scope, clt)   # 타 층 노드 포함(전역 id)
+        for line in query.graph_facts(set(all_scope) | bridged, view, cfg):
             if line not in all_facts:
                 all_facts.append(line)
 

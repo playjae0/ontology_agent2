@@ -1,0 +1,36 @@
+{
+  "layer": "quality",
+  "categories": {
+    "Failure":       "공정에서 발생할 수 있는 불량·고장 현상. 고장모드와 고장원인의 병합(열린 집합). 방향은 행 구조가 부여.",
+    "FailureEffect": "셀 관점의 결과 분류(단락, 화재 등). 닫힌 Tier1 목록 — anchor 전용, entity 생성 금지."
+  },
+  "skeleton": {
+    "type": "flat",
+    "category": "FailureEffect",
+    "data": ["단락", "화재", "방전기능상실", "충전기능상실"]
+  },
+  "mirrors": {"enabled": false},
+  "relations": ["causes", "affects", "occurs_in", "controlled_by"],
+  "category_pair_map": {},
+  "match_threshold": 0.85,
+  "query_traverse": {
+    "causes":  {"both": {"direction": "both", "recursive": false}},
+    "affects": {"both": {"direction": "both", "recursive": false}}
+  },
+  "cross_layer_traverse": {
+    "occurs_in":     {"direction": "both", "recursive": false},
+    "controlled_by": {"direction": "both", "recursive": false}
+  },
+  "fact_templates": {
+    "causes":        "{src}는 {dst}의 원인이 될 수 있다",
+    "affects":       "{src}는 {dst}(으)로 이어질 수 있다",
+    "occurs_in":     "{src}는 {dst} 공정에서 발생한다",
+    "controlled_by": "{src}는 {dst}(으)로 관리한다",
+    "attr:severity": "{node}의 심각도(S): {value}"
+  },
+  "_note": "cross_layer_traverse 기본 포함(1홉·비재귀·양방향 — 명세 §8-6·§8-R1). 브리지 문장화는 이 층 fact_templates(§8-R4).",
+  "prompts": {
+    "extract": "(훅만 — PoC 미사용, prose 추출 경로는 품질층 미도입)",
+    "judge":   "(공정층과 동일 규칙)"
+  }
+}

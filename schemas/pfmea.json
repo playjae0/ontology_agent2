@@ -1,0 +1,24 @@
+{
+  "doc_type": "pfmea",
+  "schema_version": 1,
+  "layer": "quality",
+  "use_blocks": ["common_core", "process_coord"],
+  "fields": {
+    "failure_mode":           {"role": "entity",    "category": "Failure"},
+    "cause":                  {"role": "entity",    "category": "Failure"},
+    "severity":               {"role": "attribute", "attach_to_field": "effect_category", "optional": true},
+    "effect_category":        {"role": "anchor",    "target_category": "FailureEffect"},
+    "effect_detail":          {"role": "content",   "attach_to_field": "effect_category", "optional": true},
+    "control_item_for_fm":    {"role": "entity",    "category": "Property", "target_layer": "process", "optional": true},
+    "control_item_for_cause": {"role": "entity",    "category": "Property", "target_layer": "process", "optional": true},
+    "prevention_control":     {"role": "content",   "attach_to_field": "cause", "optional": true},
+    "detection_control":      {"role": "content",   "attach_to_field": "failure_mode", "optional": true}
+  },
+  "edges": [
+    {"from": "cause",        "relation": "causes",        "to": "failure_mode"},
+    {"from": "failure_mode", "relation": "affects",       "to": "effect_category"},
+    {"from": "failure_mode", "relation": "occurs_in",     "to": "@process_ref"},
+    {"from": "failure_mode", "relation": "controlled_by", "to": "control_item_for_fm",    "optional": true},
+    {"from": "cause",        "relation": "controlled_by", "to": "control_item_for_cause", "optional": true}
+  ]
+}
