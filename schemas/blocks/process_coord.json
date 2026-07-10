@@ -1,0 +1,7 @@
+{
+  "fields": {
+    "process_group": {"role": "anchor", "target_category": "Process"},
+    "process_ref":   {"role": "anchor", "target_category": "Process"},
+    "process_no":    {"role": "meta", "optional": true}
+  }
+}

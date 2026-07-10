@@ -1,0 +1,62 @@
+{
+  "doc_id": "CP01",
+  "doc_type": "cp",
+  "source_path": "(mock)",
+  "revision": "R1",
+  "parsed_at": "2026-01-01T00:00:00",
+  "parser_version": "mock-0.1",
+  "context": {"model": "M1"},
+  "payload_kind": "table",
+  "records": [
+    { "chunk_id": "CP01-C1", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "설비": "노칭 프레스", "관리항목": "노칭 정밀도",
+      "규격": {"min": -0.1, "center": 0, "max": 0.1, "unit": "mm"},
+      "측정방법": "비전 측정, 전수", "대응계획": "정밀도 이탈 시 금형 점검 후 재조정" },
+
+    { "chunk_id": "CP01-C2", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "설비": "노칭 프레스", "관리항목": "금형 클리어런스",
+      "규격": {"min": 18, "center": 20, "max": 22, "unit": "um"},
+      "측정방법": "마이크로미터, 일 1회", "대응계획": "클리어런스 이탈 시 금형 교체" },
+
+    { "chunk_id": "CP01-C3", "process_group": "조립", "process_ref": "스태킹", "electrode_type": "both",
+      "설비": "스태커", "관리항목": "적층 정렬도",
+      "규격": {"min": -0.2, "center": 0, "max": 0.2, "unit": "mm"},
+      "측정방법": "비전 정렬 검사", "대응계획": "정렬도 이탈 시 흡착 압력 조정" },
+
+    { "chunk_id": "CP01-C4", "process_group": "조립", "process_ref": "스태킹", "electrode_type": "both",
+      "설비": "스태커", "관리항목": "적층 정렬도",
+      "규격": {"min": -0.3, "center": 0, "max": 0.3, "unit": "mm"},
+      "측정방법": "비전 정렬 검사", "대응계획": "정렬도 이탈 시 센서 재교정" },
+
+    { "chunk_id": "CP01-C5", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "both",
+      "설비": "초음파 융착기", "관리항목": "용접 가압력",
+      "규격": {"center": 0.3, "unit": "MPa"},
+      "측정방법": "로드셀, 전수", "대응계획": "가압력 이탈 시 혼 점검" },
+
+    { "chunk_id": "CP01-C6", "process_group": "조립", "process_ref": "실링", "electrode_type": "both",
+      "설비": "실러", "관리항목": "실링 온도",
+      "규격": {"min": 175, "center": 180, "max": 185, "unit": "C"},
+      "측정방법": "열전대, 연속", "대응계획": "온도 이탈 시 히터 점검" },
+
+    { "chunk_id": "CP01-C7", "process_group": "조립", "process_ref": "스태킹", "electrode_type": "both",
+      "context": {"model": "M2"},
+      "설비": "스태커", "관리항목": "적층 정렬도",
+      "규격": {"min": -0.25, "center": 0, "max": 0.25, "unit": "mm"},
+      "측정방법": "비전 정렬 검사", "대응계획": "정렬도 이탈 시 흡착 압력 조정" },
+
+    { "chunk_id": "CP01-C8", "process_group": "조립", "process_ref": "노칭", "electrode_type": "cathode",
+      "설비": "노칭 프레스", "관리항목": "노칭 정밀도",
+      "규격": {"min": -0.1, "center": 0, "max": 0.1, "unit": "mm"},
+      "측정방법": "비전 측정, 전수", "대응계획": "정밀도 이탈 시 금형 점검" },
+
+    { "chunk_id": "CP01-C9", "process_group": "조립", "process_ref": "노칭", "electrode_type": "anode",
+      "설비": "노칭 프레스", "관리항목": "노칭 정밀도",
+      "규격": {"min": -0.12, "center": 0, "max": 0.12, "unit": "mm"},
+      "측정방법": "비전 측정, 전수", "대응계획": "정밀도 이탈 시 금형 점검" },
+
+    { "chunk_id": "CP01-C9b", "process_group": "조립", "process_ref": "노칭", "electrode_type": "anode",
+      "설비": "노칭 프레스", "관리항목": "버 높이",
+      "규격": {"max": 5, "unit": "um"},
+      "측정방법": "현미경 샘플", "대응계획": "버 발생 시 금형 연마" }
+  ]
+}

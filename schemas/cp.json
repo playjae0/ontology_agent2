@@ -1,0 +1,17 @@
+{
+  "doc_type": "cp",
+  "schema_version": 1,
+  "layer": "process",
+  "use_blocks": ["common_core", "process_coord"],
+  "fields": {
+    "설비":     {"role": "entity",    "category": "Unit"},
+    "관리항목": {"role": "entity",    "category": "Property"},
+    "규격":     {"role": "attribute", "attach_to_field": "관리항목", "attr_name": "spec", "contextual": true, "optional": true},
+    "측정방법": {"role": "attribute", "attach_to_field": "관리항목", "optional": true},
+    "대응계획": {"role": "content",   "attach_to_field": "관리항목", "optional": true}
+  },
+  "edges": [
+    {"from": "설비", "relation": "part_of",      "to": "@process_ref"},
+    {"from": "설비", "relation": "has_property", "to": "관리항목"}
+  ]
+}

@@ -11,7 +11,8 @@
     "data": {"조립": ["노칭", "스태킹", "탭용접", "패키징", "전해액주입", "실링"]},
     "relations": {"child": "part_of", "sibling": "precedes"}
   },
-  "mirrors": {"enabled": true},
+  "mirrors": {"enabled": true, "relation": "mirrors"},
+  "polarity": {"field": "electrode_type", "values": ["cathode", "anode"], "bind_categories": ["Unit", "Property"]},
   "relations": ["part_of", "precedes", "has_property", "mirrors"],
   "category_pair_map": {
     "Unit,Process": "part_of",
