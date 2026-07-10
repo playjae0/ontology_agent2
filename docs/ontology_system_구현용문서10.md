@@ -1,5 +1,6 @@
-# Ontology System 구현용 문서 v1.9 (Claude Code 입력물)
+# Ontology System 구현용 문서 v1.10 (Claude Code 입력물)
 
+> v1.10: 명세 v1.11 동기화 — mirrors self-heal(매 build 재평가·쌍 키 dedup·해소 시 큐 제거), 재인입 회수 3분류(사전 보존은 단위5), 단위5 판정에 재인입 테스트.
 > v1.9: role 표기 통일(필드 role 5종 + edges 선언, edges는 핸들러 없이 루프 후처리) — 명세 v1.10·정의서 v1.7 정합.
 > v1.8: §9 실행 준비 신설(Claude Code 자율 실행용) — 환경(Python·패키지·init), 착수 단위 세분(1a~1d/2~5), 자동 검증(완료판정→테스트), 막힘 프로토콜(BLOCKERS.md, 추측 금지), 진행 로그(PROGRESS.md).
 > v1.7: 명세 v1.9 동기화 — 기능 감사(다중 occurs_in은 mock R11에 이미 반영됨 확인, flow 단일 스트림). 계약 변경 없음(명세 서술 정합만).
@@ -175,7 +176,7 @@ ontology/
 - **graph.py**: `add_node(canonical, category, layer, status, attrs, provenance) → id` — **id는 전역 유일**(data/id_seq.json 공유 시퀀스, 층 무관) / `add_edge(src, rel, dst, status, provenance)`(중복 무시. **status="deleted_by_user" 툼스톤인 (src,rel,dst)-by-id는 건너뜀** — 재인입 부활 방지, 명세 §5.5-3. enforcement는 단계5) / `neighbors(ids, traverse_spec)` — traverse_spec은 관계별 {direction: "out|in|both", recursive: bool} dict를 **인자로** 받음(내용은 층 코드가 소유 — 현 C, 명세 §5.6.2) / save/load.
 - **dictionary.py**: **전 층 공유 단일 파일**(data/dictionary.json). `lookup(surface) → 후보 노드 id 목록`(층 간 표면형 충돌 허용 — 호출자가 category/layer로 선별). register 시 provenance 필수. canonical과 alias 모두 등재.
 - **matcher.py**: 입력 mention+후보들(canonical, aliases, 부착 위치, category). USE_MOCK=문자열 정규화 포함 규칙(공백 제거 후 동일/포함), 실물=판정 프롬프트(정의문·비대칭 기준은 층 config에서 주입). **카테고리 불일치 안전망**: 추출 category ≠ 최상 후보 category → match 금지.
-- **ingest.py**: 정의서 §6 핸들러 루프(필드 role 5종 핸들러) + edges 후처리(핸들러 아님, 필드 해소 후 엣지 생성) + 검증. 핸들러 공통 시그니처 `handle(value, spec, ctx) → resolved_id|value|None`. ctx = {graph들(layer별), dic, queue, record, schema}. 처리 순서: Pass1 = 전 record의 anchor/entity 해소(버퍼) → Pass2 = attribute/content/edges 적용. entity 3분기: 매칭(alias 누적)/신규(auto 생성+큐 kind=auto_node)/불확실(신규+큐 kind=uncertain_match). anchor 미스 → 후보검색+판정 → 실패 시 큐 kind=orphan_anchor(레코드 전체를 보류하지 않고 해당 엣지만 생략). 재인입: 동일 doc_id 유입 시 해당 provenance 항목 제거 → provenance 0의 auto 노드는 큐 kind=evidence_lost. **context 상속**: record.context가 없으면 봉투 context 사용. **맥락형 attribute**(contextual:true): [{context, value, provenance}] 리스트에 추가(provenance 필수, §0-5), 충돌은 같은 context 그룹 내 deep-equal만. 단순형도 [{value, provenance}]. 재인입 시 attribute 항목도 doc_id로 회수(같은 문서 개정값은 교체, provenance-0은 evidence_lost). **극성 결합 canonical**: category∈{Unit,Property} AND record.electrode_type=cathode/anode일 때만 entity 생성·조회 canonical에 극성 결합(명세 §5.2 v1.7 — Failure 제외, both/무표기는 극성 무관). mirrors 자동 규칙의 전제. **mirrors 자동 규칙**: build 저장 직전, 같은 부모 아래 (극성 제거 canonical 동일 + electrode_type 반대) 노드 쌍에 mirrors 엣지 생성 + 자식 수·구성 비교 → 불일치 시 mirror_asymmetry 큐(문자열 비교, LLM 불요 — 명세 §5.3). **엣지 provenance**: 재인입 시 엣지 provenance도 doc_id 단위로 회수, provenance-0 엣지는 evidence_lost 큐(노드 대칭).
+- **ingest.py**: 정의서 §6 핸들러 루프(필드 role 5종 핸들러) + edges 후처리(핸들러 아님, 필드 해소 후 엣지 생성) + 검증. 핸들러 공통 시그니처 `handle(value, spec, ctx) → resolved_id|value|None`. ctx = {graph들(layer별), dic, queue, record, schema}. 처리 순서: Pass1 = 전 record의 anchor/entity 해소(버퍼) → Pass2 = attribute/content/edges 적용. entity 3분기: 매칭(alias 누적)/신규(auto 생성+큐 kind=auto_node)/불확실(신규+큐 kind=uncertain_match). anchor 미스 → 후보검색+판정 → 실패 시 큐 kind=orphan_anchor(레코드 전체를 보류하지 않고 해당 엣지만 생략). 재인입: 동일 doc_id 유입 시 해당 provenance 항목 제거 → provenance 0의 auto 노드는 큐 kind=evidence_lost. **context 상속**: record.context가 없으면 봉투 context 사용. **맥락형 attribute**(contextual:true): [{context, value, provenance}] 리스트에 추가(provenance 필수, §0-5), 충돌은 같은 context 그룹 내 deep-equal만. 단순형도 [{value, provenance}]. 재인입 시 attribute 항목도 doc_id로 회수(같은 문서 개정값은 교체, provenance-0은 evidence_lost). **극성 결합 canonical**: category∈{Unit,Property} AND record.electrode_type=cathode/anode일 때만 entity 생성·조회 canonical에 극성 결합(명세 §5.2 v1.7 — Failure 제외, both/무표기는 극성 무관). mirrors 자동 규칙의 전제. **mirrors 자동 규칙**: build 저장 직전 **매번 재평가**(§5.3 self-heal), 같은 부모 아래 (극성 제거 canonical 동일 + electrode_type 반대) 노드 쌍에 mirrors 엣지 생성 + 자식 수·구성 비교 → 불일치 시 mirror_asymmetry 큐. **큐는 (극성제거 canonical, 부모) 쌍 키로 dedup**(재빌드/재인입 중복 없음), 대칭 회복 시 제거. LLM 불요. **엣지 provenance**: 재인입 시 엣지 provenance도 doc_id 단위로 회수, provenance-0 엣지는 evidence_lost 큐(노드 대칭).
 
 ## 4. 층 config (전문)
 
@@ -336,7 +337,7 @@ ontology/
 | 2 | 질의 4단 + 이원 근거 채널 | queries.json 1~8·11·12가 expected_path대로 응답. flow 질의(5번)가 골격 전체 공급. 링킹 미스 로그 기록 확인 |
 | 3 | 품질지식층 = **config+스키마만 추가**(층 코드 0) + PFMEA01 인입 + cross-layer | **`git diff core/` 가 비어 있음** = **품질층이 config만으로 core 범용 파이프라인에서 도는 것**이 성공 판정(§3.6 config-only 확증). 도중 core 수정이 필요했다면 그 지점이 "config 표현 부족→core 패턴 추가"의 첫 실측(기록 남길 것). "이물 유입→절연 파괴→내부 단락" causes 사슬 존재. R9 orphan_anchor(effect)·R13 orphan_anchor(process_ref, occurs_in+Property 동반 드롭)·R12 unknown_field 큐. 규칙A(auto Property)·규칙B(공정 부착 → C2로 보강) 동작. effect_category↔severity 정렬로 spec_conflict는 C4에서만 발생. add_edge가 deleted_by_user status를 건너뛰는 계약 준수(enforcement는 단계5). cross 질의 응답: 9번=occurs_in 역방향으로 노칭의 Failure들, 10번=affects 역방향 **직접 결과**(수집 노드 간 causes 엣지는 그래프 사실로 문장화 — 2홉 연쇄 전체는 스모크 요구 아님). **Q1~8 회귀**: cross-layer on 상태에서 1~8이 단계2 baseline과 동일 응답(브리지로 딸려온 Failure 청크·노드에 오염 안 됨) — §8-6 채널분리(그래프 사실 관련성 필터 + 청크 tier2 잘림)의 실증 지점 |
 | 4 | 플랫폼 연동 (명세 §16.2 개조 1·2) | 플랫폼이 subprocess로 build/query 호출, 2층+cross-layer 그래프 표시, 수정 큐 열람 |
-| 5 | 수정 도구 + 계기판 최소 (② 명세 마감 후 착수) | 병합/alias 이관/개명/엣지 삭제가 CLI(+플랫폼)에서 동작, 큐 소화 왕복 확인 |
+| 5 | 수정 도구 + 계기판 최소 + **재인입 회수 ②(사전 보존)** (② 명세 마감 후 착수) | 병합/alias 이관/개명/엣지 삭제(deleted_by_user enforcement) CLI+플랫폼 동작. **재인입 테스트**: CP01 동일 재인입→노드 중복 없음·asymmetry 1 유지, 대칭으로 고쳐 재인입→asymmetry 0(§5.5-3 ②③·§5.3 self-heal). 큐 소화 왕복 |
 
 - 각 단계 종료 시 사람 검수(그래프 JSON·큐 눈검사) 후 진행 — 병목은 코드 생성이 아니라 검수 시간.
 - 단계 3에서 품질층 추가가 **core를 한 줄도 안 건드렸는지**를 기록 — config-only 확증(§3.6). core 수정이 있었다면 어느 결정점이 config로 표현 안 됐는지가 3층 대비 관찰 데이터.
@@ -371,7 +372,7 @@ ontology/
 | 2 | core/query.py + router + cli/query + queries.json | Q1~8·11·12 expected_path 일치, flow(5) 골격 공급, 미스 로그 |
 | 3 | quality config+스키마만 추가 + PFMEA01 + cross-layer | git diff core/ 빈 것(config-only 확증), causes 사슬, R9/R13 orphan·R12 unknown_field, cross Q9·10, Q1~8 회귀 무오염 |
 | 4 | 플랫폼 연동(§16.2 개조1·2) | subprocess build/query, 2층+cross 그래프·큐 열람 |
-| 5 | 수정 도구 + 계기판 최소 | 병합/이관/개명/엣지삭제(deleted_by_user enforcement) CLI 동작 |
+| 5 | 수정 도구 + 계기판 최소 + 재인입 회수②(사전 보존) | 병합/이관/개명/엣지삭제(deleted_by_user) CLI 동작 + 재인입 테스트(중복 없음·큐 해소, §5.5-3) |
 
 ### 9.3 자동 검증 (완료판정 → 실행 가능한 테스트)
 - 각 단위의 통과 조건을 **tests/test_<단위>.py**(assert 기반, 표준 unittest 또는 단순 assert 스크립트)로 구현. mock 데이터 인입 후 그래프 JSON·큐를 로드해 상태를 assert.

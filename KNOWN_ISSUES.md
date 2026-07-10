@@ -24,5 +24,41 @@
 
 ---
 
+## (다) cross-layer 사실 이중 렌더 + raw id 노출  [중] — 검수 라운드2 신규
+
+**증상**: 상위층(quality)에 링크되는 cross-layer 질의에서 같은 엣지가 **두 번**, 그중 하나는 dst가 canonical이 아닌 **node id**로 렌더된다. 실측 Q10("단락으로 이어질 불량"): `절연 파괴는 N0002 공정에서 발생한다`(깨짐) + `절연 파괴는 노칭 공정에서 발생한다`(정상)가 함께 출력.
+
+**원인/위치**: `cli/query.py` `route()`의 per-layer 루프 `all_facts += query.graph_facts(scope, g, cfg)` — `graph_facts._canon`이 **단일 층 그래프(g)**만 조회하므로 cross-layer 엣지의 타 층 dst를 못 풀고 id를 그대로 문자열화. 반면 브리지 `_bridge`는 `_AllGraphsView`(전 층 노드 병합)로 전역 해소 → 정상 렌더. 두 경로가 같은 엣지를 각각 렌더 → 이중+불일치.
+
+**영향**: 그래프 데이터는 정상, **라우터 렌더만** 문제. answer_path는 맞음. 단 뷰어가 그래프 사실을 그대로 표시하면 "N0002 공정" 같은 깨진 문자열이 사용자에게 노출.
+
+**조치 방향(사람 결정)**: (a) per-layer `graph_facts` 호출도 전역 canonical 뷰(`_AllGraphsView`)로 렌더, 또는 (b) per-layer 사실에서 `cross_layer_traverse` 관계 엣지는 제외하고 브리지가 단독 소유(중복 제거). **플랫폼(시각화) 착수 전 권장** — 라우터 1곳 수정, core 무관.
+
+**검증**: Q10 그래프 사실에 `N0002/N0003` 등 id 문자열 0건, occurs_in 사실이 canonical로 1회씩만.
+
+## (라) 다중 occurs_in · 극성 잔존 공정(Process급) 미실증  [중·커버리지] — 검수 라운드2 신규
+
+**증상**: 명세 §8-1 핵심 메커니즘 2개가 mock에서 실증되지 않음.
+- **다중 occurs_in**("한 불량이 여러 공정에서 발생 → occurs_in 다중, '이 불량 유발 공정들' 질의의 답"): 실측상 **어떤 Failure도 occurs_in 2개+ 없음**. §6.1 R11이 지목한 실증자 `이물 유입`은 R3·R11 모두 *cause*라 occurs_in(=failure_mode 전용) 대상이 아니어서 0건.
+- **극성 잔존 공정**(§5.2 ②, Process 레벨 극성 분기: cathode 탭용접/anode 탭용접 precedes 순차 + mirrors): 골격이 단일 `탭용접`이라 flow가 자명하게 단일 스트림 — Process급 극성 분기·mirrors·단일 스트림 규칙 미검증.
+
+**원인**: 코드 능력은 있으나(같은 failure_mode가 2개 process_ref 행에 등장하면 다중 occurs_in 성립; skeleton.data에 극성 Process를 넣으면 분기) **mock 데이터가 두 경우를 안 만듦**.
+
+**조치 방향(사람 결정)**: mock 보강 — (1) 한 failure_mode를 서로 다른 process_ref 2개 행에 배치(다중 occurs_in 실증), (2) 골격에 극성 잔존 공정 한 쌍 추가(예: cathode 탭용접/anode 탭용접). 코드 수정 불요일 가능성 높음(둘 다 config/mock). 단위 4/5 논의 시 함께.
+
+**검증**: 다중 occurs_in Failure ≥1, Q("이 불량 유발 공정들") 응답에 2개 공정, 극성 Process 쌍 mirrors + flow 단일 스트림.
+
+## (마) §3.6 명시적 실패 불완전(query traverse)  [하] — 검수 라운드2 신규
+
+**증상**: config로 표현 안 되는 것이 "시끄럽게" 드러나야 하나(§3.6 탈출구), query traverse의 미지원 방향/패턴은 **silent**(빈 결과)로 넘어간다. skeleton.type은 raise(정상)지만 `graph.neighbors`/`query.expand`는 알 수 없는 direction을 만나면 매칭 0건 반환.
+
+**원인/위치**: `core/graph.py` neighbors — `direction in ("out","both")`/`("in","both")` 미해당 시 아무것도 안 하고 통과. 명시적 실패 없음.
+
+**조치 방향(사람 결정)**: neighbors/expand에서 config가 준 direction·recursive가 지원 집합 밖이면 raise("config 표현 밖 — core 패턴 추가 필요", §3.6). 저위험 소규모.
+
+**검증**: 잘못된 direction config로 질의 시 raise + 메시지.
+
+---
+
 ## 참고 — mock 한계(실물 검증 항목, 결함 아님)
 - P8 "notching press"(영문): MOCK 문자열 정규화로 "노칭 프레스"와 매칭 불가 → 신규 생성. 실물 LLM 판정에서 해소(§6.3 P8).
