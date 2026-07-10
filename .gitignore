@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Env / secrets
+.env
+
+# OS
+.DS_Store
+
+# Claude local settings (personal, per-machine)
+.claude/settings.local.json
+
+# Generated runtime data (진실 그래프는 build로 재생성 — P5)
+data/

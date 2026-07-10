@@ -1,0 +1,9 @@
+# PoC core (USE_MOCK=1 경로)는 외부 패키지 0 목표 — 표준 라이브러리만 사용 (구현문서 §9.1).
+# 아래는 실물 경로(USE_MOCK=0) 전환 시에만 필요한 선택 의존이며,
+# USE_MOCK=1에서는 import되지 않아야 한다(§0-8). 지연 import로 격리.
+
+# 실물 임베딩 (노드 판정용) — USE_MOCK=0에서만
+# sentence-transformers>=2.2.0
+
+# LLM 게이트웨이 호출 — 표준 urllib로 충분하나 필요 시
+# requests>=2.31.0
