@@ -1,0 +1,14 @@
+[
+  {"id": 1,  "type": "Q1", "question": "노칭 프레스 금형 관리 어떻게 해?",        "expected_path": "chunk"},
+  {"id": 2,  "type": "Q1", "question": "적층 정렬도 관리 방법은?",                 "expected_path": "chunk"},
+  {"id": 3,  "type": "Q2", "question": "노칭 다음 공정은?",                        "expected_path": "graph_fact"},
+  {"id": 4,  "type": "Q2", "question": "스태킹에 어떤 설비가 있어?",               "expected_path": "graph_fact"},
+  {"id": 5,  "type": "Q3", "question": "조립 전체 공정 흐름 설명해줘",             "expected_path": "graph_fact"},
+  {"id": 6,  "type": "Q4", "question": "노칭 정밀도 규격이 뭐야?",                 "expected_path": "graph_fact"},
+  {"id": 7,  "type": "Q4", "question": "실링 온도 규격은?",                        "expected_path": "graph_fact"},
+  {"id": 8,  "type": "Q5", "question": "금형 클리어런스를 관리하는 설비는?",       "expected_path": "graph_fact"},
+  {"id": 9,  "type": "Q5-cross", "question": "노칭에서 발생할 수 있는 불량은?",     "expected_path": "graph_fact"},
+  {"id": 10, "type": "cross", "question": "단락으로 이어질 수 있는 불량은 뭐가 있어?", "expected_path": "graph_fact"},
+  {"id": 11, "type": "Q8", "question": "노칭이 영어로 뭐야?",                      "expected_path": "general_knowledge"},
+  {"id": 12, "type": "Q8", "question": "리튬이온 배터리 동작 원리 설명해줘",        "expected_path": "general_knowledge"}
+]

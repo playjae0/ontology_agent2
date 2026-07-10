@@ -15,7 +15,7 @@
 | 1b skeleton + process config.skeleton | ✅ | test_1b OK | Process 7·part_of 6·precedes 5, flat 타입 |
 | 1c ingest+matcher+build + cp.json | ✅ | test_1c OK | Unit/Property/has_property, C4 conflict·C7 병렬·C8/C9 극성+mirrors+asymmetry |
 | 1d content(prose) 경로 + PPT01 | ✅ | test_1d OK | P5 linked=false, P6 주액기 auto+큐, describes, P2 스침 비추출 |
-| 2 query + router + cli/query + queries | 대기 | — | |
+| 2 query + router + cli/query + queries | ✅ | test_2 OK | Q1~8·11·12 expected_path, flow 골격 공급, 미스 로그 |
 | 3 quality config+스키마 + PFMEA01 + cross-layer | 대기 | — | git diff core/ 판정 |
 
 ## 로그
@@ -29,3 +29,7 @@
 - 1d ✅ — prose 경로(llm.extract_mentions·ingest_prose), schemas/ppt.json, mock/PPT01. test_1d 통과.
     - MOCK 추출 = chunk.meta.mock_mentions(파서 mock의 LLM 추출 시뮬레이션, §8·§16.3). 전 청크 원문 보존(P5·§5.6.6).
     - P8 "notching press"(영문 표기 변형)는 MOCK 정규화로 노칭 프레스와 매칭 불가 → 신규 생성. **실물 검증 항목**(§6.3 P8 주석대로 MOCK 한계).
+- 2 ✅ — core/query.py(link·expand·collect·graph_facts·flow_scope), cli/query.py(라우터+classify+compose), mock/queries.json. test_2 통과 + CLI 스모크(init/build/query) 확인.
+    - answer_path 분류(graph_fact/chunk/general_knowledge)는 실물 답변 LLM의 채널 선택 지점(§5.6.4)을 MOCK 대체 — cli(라우터)에 질문 언어 패턴으로 구현(core는 구조적 파이프라인만, 층 어휘 없음).
+    - cross_layer_traverse 브리지는 quality 층 추가(단위3) 후 활성 — process 단독 단계에선 무동작.
+    - fact_templates의 "{src}는" 조사 오류는 config(B) 문제 — 코드 무관, 필요 시 config만 수정.
