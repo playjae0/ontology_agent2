@@ -1,0 +1,43 @@
+{
+  "doc_id": "PPT01",
+  "doc_type": "ppt",
+  "source_path": "(mock)",
+  "revision": "R1",
+  "parsed_at": "2026-01-02T00:00:00",
+  "parser_version": "mock-0.1",
+  "context": {"model": "M1"},
+  "payload_kind": "prose",
+  "chunks": [
+    { "chunk_id": "PPT01-P1", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "section": "슬라이드 3", "text": "노칭 프레스는 전극 원단을 정밀 타발한다. 금형 관리가 품질의 핵심이며, 마모 주기를 관리한다.",
+      "meta": {"mock_mentions": [{"surface": "노칭 프레스", "category": "Unit"}]} },
+
+    { "chunk_id": "PPT01-P2", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "section": "슬라이드 4", "text": "타발된 전극은 이후 스태커로 이송된다. 본 절은 노칭 공정 자체를 다룬다.",
+      "meta": {"mock_mentions": []} },
+
+    { "chunk_id": "PPT01-P3", "process_group": "조립", "process_ref": "스태킹", "electrode_type": "both",
+      "section": "슬라이드 6", "text": "적층 정렬도는 셀 성능에 직결된다. 비전 정렬 검사로 편차를 관리한다.",
+      "meta": {"mock_mentions": [{"surface": "적층 정렬도", "category": "Property"}]} },
+
+    { "chunk_id": "PPT01-P4", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "both",
+      "section": "슬라이드 8", "text": "2025년 3월 기준 용접 불량률 0.3%, 가압력 0.3MPa, 진폭 20um 조건에서 운전.",
+      "meta": {"mock_mentions": []} },
+
+    { "chunk_id": "PPT01-P5", "process_group": "조립", "process_ref": "패키징", "electrode_type": "both",
+      "section": "슬라이드 10", "text": "작업 시 정전기 방지복과 보호 장구를 착용한다. 일반 안전 수칙을 준수한다.",
+      "meta": {"mock_mentions": []} },
+
+    { "chunk_id": "PPT01-P6", "process_group": "조립", "process_ref": "전해액주입", "electrode_type": "both",
+      "section": "슬라이드 12", "text": "주액기는 정량 노즐로 전해액을 주입한다. 주액량 편차를 관리한다.",
+      "meta": {"mock_mentions": [{"surface": "주액기", "category": "Unit"}]} },
+
+    { "chunk_id": "PPT01-P7", "process_group": "조립", "process_ref": "실링", "electrode_type": "both",
+      "section": "슬라이드 14", "text": "[이미지 요약] 실러가 파우치 상단을 열융착하는 장면. 실링 온도가 표시됨.",
+      "meta": {"image_summary": true, "mock_mentions": [{"surface": "실러", "category": "Unit"}]} },
+
+    { "chunk_id": "PPT01-P8", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "section": "슬라이드 15", "text": "The notching press punches the electrode foil with high precision.",
+      "meta": {"mock_mentions": [{"surface": "notching press", "category": "Unit"}]} }
+  ]
+}

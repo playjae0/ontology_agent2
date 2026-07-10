@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 
-from core import matcher
+from core import matcher, llm
 
 log = logging.getLogger(__name__)
 
@@ -268,6 +268,31 @@ def ingest_doc(doc, schema, ctx):
             if spec["role"] in PASS2_ROLES:
                 HANDLERS[spec["role"]](f, rec.get(f), spec, ctx)
         _make_edges(schema.get("edges", []), resolved, ctx, graph)
+
+
+def ingest_prose(doc, ctx):
+    """prose 문서 인입(명세 §5.5·§5.6.1, 정의서 §3.4).
+
+    전 청크 원문 보존(링킹 0건도 — 하이브리드 서치 전제, §5.6.6). 언급 추출(LLM/MOCK)
+    → 개체 판정 경로로 해소(신규는 auto 생성 + 큐) → describes 연결. 미해소 언급은 orphan_chunk_link.
+    """
+    for chunk in doc.get("chunks", []):
+        ctx.record = chunk
+        ctx.resolved = {}
+        cid = chunk["chunk_id"]
+        mentions = llm.extract_mentions(chunk, ctx.config)          # MOCK: meta.mock_mentions
+        meta = {k: v for k, v in (chunk.get("meta") or {}).items() if k != "mock_mentions"}
+        ctx.chunks.add_chunk(cid, doc["doc_id"], chunk.get("text", ""),
+                             section=chunk.get("section"), meta=meta, linked=False)
+        for m in mentions:
+            spec = {"role": "entity", "category": m["category"]}
+            nid = handle_entity("(prose)", m.get("surface"), spec, ctx)
+            if nid is not None:
+                ctx.chunks.add_describes(cid, nid)                  # 해소된 노드에 연결
+            else:
+                ctx.enqueue("orphan_chunk_link", {"chunk_id": cid, "surface": m.get("surface")},
+                            reason="prose 언급 미해소")
+    # 링킹 0건 청크는 linked=False로 보존(전 청크 보존 — P5·§5.6.6)
 
 
 def _validate_record(rec, fields, ctx):

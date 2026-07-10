@@ -92,9 +92,12 @@ def build_doc(doc, project_root, data_root):
     ingest.reinject(doc["doc_id"], s.graphs, s.dic, s.chunks, s.queue,
                     parsed_at=doc.get("parsed_at", ""))
 
-    # 2-pass 인입
+    # 인입 — payload_kind로 table(핸들러 루프) vs prose(추출→describes) 분기
     ctx = ingest.Ctx(s.graphs, s.dic, s.queue, s.chunks, doc, config, schema)
-    ingest.ingest_doc(doc, schema, ctx)
+    if doc.get("payload_kind") == "prose":
+        ingest.ingest_prose(doc, ctx)
+    else:
+        ingest.ingest_doc(doc, schema, ctx)
 
     # mirrors 자동 규칙 — 발견된 각 층에 대해(enabled 층만 동작, config 구동)
     for lyr, cfg in s.layers_cfg.items():

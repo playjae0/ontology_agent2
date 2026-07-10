@@ -1,0 +1,9 @@
+{
+  "doc_type": "ppt",
+  "schema_version": 1,
+  "layer": "process",
+  "payload_kind": "prose",
+  "use_blocks": [],
+  "fields": {},
+  "_note": "prose 문서는 role 핸들러 필드가 없다 — 공통부+content 고정형(명세 §6.2). 추출→describes 경로로 처리."
+}

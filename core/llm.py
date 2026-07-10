@@ -16,6 +16,19 @@ def use_mock() -> bool:
     return os.environ.get("USE_MOCK", "1") != "0"
 
 
+def extract_mentions(chunk, config):
+    """prose 청크에서 언급 추출 → [{surface, category}] (명세 §5.4-1, §7).
+
+    USE_MOCK: LLM 대체 — 청크 meta.mock_mentions(파서 mock이 넣은 추출 시뮬레이션)를 사용.
+    힌트가 없으면 추출 0(훅). 실물 경로는 정의문 3종을 삽입한 추출 프롬프트로 게이트웨이 호출.
+    (mock = 메커니즘 검증용이며 추출 품질 측정이 아님 — 명세 §16.3.)
+    """
+    if use_mock():
+        meta = chunk.get("meta") or {}
+        return list(meta.get("mock_mentions", []))
+    raise RuntimeError("실물 추출 경로 미구현 — USE_MOCK=1로 실행하거나 게이트웨이 연결 필요")
+
+
 def gateway_config():
     return {
         "url": os.environ.get("LLM_GATEWAY_URL"),
