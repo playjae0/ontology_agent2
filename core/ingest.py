@@ -402,7 +402,12 @@ def apply_mirrors(graph, config, enqueue):
     for (cat, base), by_pol in groups.items():
         for x in by_pol.get(a_val, []):
             for y in by_pol.get(b_val, []):
+                # 이미 연결된 쌍이면 재감지 — 엣지·큐 모두 건너뜀(매 build 재실행 시 중복 큐잉 방지)
+                already = any(e["src"] == x and e["rel"] == relation and e["dst"] == y
+                              for e in graph.edges)
                 graph.add_edge(x, relation, y, status="auto", provenance=["auto:mirror_rule"])
+                if already:
+                    continue
                 sx = _incident_sig(graph, x, {y}, strip, relation)
                 sy = _incident_sig(graph, y, {x}, strip, relation)
                 if sx != sy:
