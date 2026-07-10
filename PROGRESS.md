@@ -43,6 +43,12 @@
     - **core 무변경**. 단위3에서 코드 변경은 `cli/query.py`(라우터)뿐 — cross-layer 브리지를 전역 scope 시딩 + 전 층 노드 병합 뷰(canonical 전역 해소)로 개선. 라우터는 §8-R1이 지정한 cross-layer **합성 지점**이며 층 어휘 없이 config(cross_layer_traverse·fact_templates) 구동이라, Rule-of-Three 관찰상 "2번째 층이 config-only로 붙고, 손댄 코드는 core가 아니라 합성 라우터"라는 실측.
 
 ## 국면 1 mock 구현 완료 (단위 1a~3)
-- 6개 테스트(test_1a·1b·1c·1d·2·3) 전부 통과, USE_MOCK=1 무의존.
+- 7개 테스트(test_1a·1b·1c·1d·2·3·mirror_selfheal) 전부 통과, USE_MOCK=1 무의존.
 - **config-only 확증 성공** = 핵심 설계 가설(범용성 전략 §3) 실증.
 - 남은 로드맵: 단위 4(플랫폼 연동)·5(수정 도구+계기판) — 국면1 후반, 별도 착수.
+
+## 검수 라운드 1 (사람 지시 반영)
+- **Q1 auto_node 42건 감사**: 오분리 0(정규화 canonical 충돌 없음). "노칭정밀도"(R12)는 정상 매칭(신규 아님). 예외 "notching press"(영문)만 신규=문서화된 MOCK 한계.
+- **(가) mirror self-heal 수정**: `apply_mirrors`를 매 build 재평가로 전환 — 이 층 mirror_asymmetry 항목 걷어내고 현재 상태로 재작성. (category, 극성제거 canonical) 그룹당 1건, **극성별 자식 시그니처 합집합** 비교(중복 노드에도 강건). 재인입→1 유지(폭증 없음), 대칭 회복→0. `test_mirror_selfheal` 검증. (이전 "첫 감지만" 픽스를 대체 — self-heal 부재 문제 해결.)
+- **(나) 재인입 노드 중복+stale 큐**: KNOWN_ISSUES.md 기록, 단위 5(재인입 회수 규칙 정밀화)에서 구현. 단위 1a~3 산출물엔 영향 없음(문서 1회 인입).
+- core self-heal 수정은 층 어휘 없음(config 구동) — config-only 성질 유지(quality 격리해도 process 파이프라인 정상).

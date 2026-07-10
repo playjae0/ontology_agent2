@@ -90,6 +90,12 @@ class ReviewQueue:
     def by_kind(self, kind):
         return [i for i in self.items if i["kind"] == kind]
 
+    def remove(self, predicate):
+        """predicate(item)==True인 항목 제거. 제거 개수 반환(self-heal 재작성 등)."""
+        before = len(self.items)
+        self.items = [i for i in self.items if not predicate(i)]
+        return before - len(self.items)
+
     def remove_doc(self, doc_id):
         self.items = [i for i in self.items if i.get("doc_id") != doc_id]
 

@@ -373,9 +373,17 @@ def _resolve_ref(ref, resolved):
 # ======================================================================
 # mirrors 자동 규칙 (명세 §5.3) — config.mirrors.enabled·config.polarity 구동
 # ======================================================================
-def apply_mirrors(graph, config, enqueue):
-    """극성 대칭 노드 자동 연결 + 자식 수·구성 비교 → mirror_asymmetry. 문자열 비교(LLM 불요)."""
+def apply_mirrors(graph, config, queue, doc_id, parsed_at=""):
+    """극성 대칭 노드 자동 연결 + 자식 대칭 검사 (self-heal). config.mirrors.enabled·polarity 구동.
+
+    **self-heal (매 build 재평가)**: 이 층의 기존 mirror_asymmetry 항목을 먼저 걷어내고 현재 그래프
+    상태로 재작성한다. (category, 극성제거 canonical) 그룹당 항목 1건(부모 맥락은 payload.shared).
+    → 재인입·후속문서로 대칭이 회복되면 항목이 사라지고, 비대칭이 지속되면 1건만 유지(폭증 없음).
+    극성별 자식 시그니처의 **합집합** 비교라 중복 노드(재인입 부작용, KNOWN_ISSUES)에도 강건.
+    문자열 비교(LLM 불요 — 명세 §5.3).
+    """
     mcfg = config.get("mirrors", {})
+    layer = config.get("layer")
     if not mcfg.get("enabled"):
         return
     relation = mcfg["relation"]
@@ -383,6 +391,7 @@ def apply_mirrors(graph, config, enqueue):
     if len(values) != 2:
         log.warning("mirrors enabled이나 polarity.values 2종 아님 — 건너뜀")
         return
+    a_val, b_val = values[0], values[1]
 
     def strip(canon):
         for v in values:
@@ -390,7 +399,10 @@ def apply_mirrors(graph, config, enqueue):
                 return canon[len(v) + 1:]
         return canon
 
-    # (category, 극성제거 canonical) 그룹핑
+    # self-heal ①: 이 층의 기존 mirror_asymmetry 항목 전부 제거 → 현재 상태로 재작성
+    queue.remove(lambda i: i["kind"] == "mirror_asymmetry" and i.get("payload", {}).get("layer") == layer)
+
+    # (category, 극성제거 canonical)로 그룹 → 극성별 노드 목록(중복 노드도 각 측에 모임)
     groups = {}
     for nid, n in graph.nodes.items():
         et = n.get("electrode_type")
@@ -398,24 +410,26 @@ def apply_mirrors(graph, config, enqueue):
             continue
         groups.setdefault((n["category"], strip(n["canonical"])), {}).setdefault(et, []).append(nid)
 
-    a_val, b_val = values[0], values[1]
     for (cat, base), by_pol in groups.items():
-        for x in by_pol.get(a_val, []):
-            for y in by_pol.get(b_val, []):
-                # 이미 연결된 쌍이면 재감지 — 엣지·큐 모두 건너뜀(매 build 재실행 시 중복 큐잉 방지)
-                already = any(e["src"] == x and e["rel"] == relation and e["dst"] == y
-                              for e in graph.edges)
+        cath = by_pol.get(a_val, [])
+        anod = by_pol.get(b_val, [])
+        if not cath or not anod:
+            continue
+        # mirror 엣지 생성(중복 엣지는 add_edge가 provenance 병합만) — 재평가라 idempotent
+        for x in cath:
+            for y in anod:
                 graph.add_edge(x, relation, y, status="auto", provenance=["auto:mirror_rule"])
-                if already:
-                    continue
-                sx = _incident_sig(graph, x, {y}, strip, relation)
-                sy = _incident_sig(graph, y, {x}, strip, relation)
-                if sx != sy:
-                    enqueue("mirror_asymmetry",
-                            {"a": x, "b": y, "category": cat, "base": base,
-                             "only_a": sorted(str(s) for s in sx - sy),
-                             "only_b": sorted(str(s) for s in sy - sx)},
-                            reason="극성 대칭 선언 후 자식 수·구성 불일치(문서 누락 vs 진짜 차이)")
+        # self-heal ②: 극성별 자식 시그니처 합집합 비교(짝 측 노드는 제외) → 대칭이면 항목 없음
+        cath_sig = set().union(*(_incident_sig(graph, x, set(anod), strip, relation) for x in cath))
+        anod_sig = set().union(*(_incident_sig(graph, y, set(cath), strip, relation) for y in anod))
+        only_a, only_b = cath_sig - anod_sig, anod_sig - cath_sig
+        if only_a or only_b:
+            queue.add("mirror_asymmetry",
+                      {"layer": layer, "category": cat, "base": base,
+                       "shared": sorted(str(s) for s in (cath_sig & anod_sig)),
+                       "only_a": sorted(str(s) for s in only_a),
+                       "only_b": sorted(str(s) for s in only_b)},
+                      doc_id, "극성 대칭 선언 후 자식 수·구성 불일치(문서 누락 vs 진짜 차이)", parsed_at)
 
 
 def _incident_sig(graph, nid, exclude, strip, mirror_rel):

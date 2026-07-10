@@ -99,13 +99,9 @@ def build_doc(doc, project_root, data_root):
     else:
         ingest.ingest_doc(doc, schema, ctx)
 
-    # mirrors 자동 규칙 — 발견된 각 층에 대해(enabled 층만 동작, config 구동)
+    # mirrors 자동 규칙 — 발견된 각 층에 대해(enabled 층만 동작, config 구동). self-heal 재평가.
     for lyr, cfg in s.layers_cfg.items():
-        ingest.apply_mirrors(
-            s.graphs[lyr], cfg,
-            lambda kind, payload, reason, _lyr=lyr: s.queue.add(
-                kind, payload, doc["doc_id"], reason, doc.get("parsed_at", "")),
-        )
+        ingest.apply_mirrors(s.graphs[lyr], cfg, s.queue, doc["doc_id"], doc.get("parsed_at", ""))
 
     s.save()
     log.info("build_doc 완료: doc=%s layer=%s", doc["doc_id"], layer)
