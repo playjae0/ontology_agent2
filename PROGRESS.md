@@ -33,3 +33,8 @@
     - answer_path 분류(graph_fact/chunk/general_knowledge)는 실물 답변 LLM의 채널 선택 지점(§5.6.4)을 MOCK 대체 — cli(라우터)에 질문 언어 패턴으로 구현(core는 구조적 파이프라인만, 층 어휘 없음).
     - cross_layer_traverse 브리지는 quality 층 추가(단위3) 후 활성 — process 단독 단계에선 무동작.
     - fact_templates의 "{src}는" 조사 오류는 config(B) 문제 — 코드 무관, 필요 시 config만 수정.
+- **core 일반화(quality 착수 전)** — `attach_entity`: (카테고리쌍→관계) 매핑으로 entity 부착.
+    - 용도: prose 관계 생성(§7-2, 주액기 part_of 전해액주입) + 걸침 필드 규칙B 공정부착(§15.7, PFMEA control_item).
+    - 대상 층의 category_pair_map을 양방향('src,dst' 자연방향) 조회 — 관계명 무가정. process config에만 map 존재, quality는 {}.
+    - **이 기능은 prose(1d)가 이미 사용** → quality 전용 아님. 그래서 quality 착수 *전에* 넣어 `git diff core/` 기준선을 완성(이후 quality는 config+schema만 추가).
+    - 이 커밋이 **단위3 config-only 판정의 core 기준선**.

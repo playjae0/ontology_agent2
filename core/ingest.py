@@ -26,9 +26,13 @@ STRUCTURAL_FIELDS = {"doc_type", "electrode_type", "context"}
 # 컨텍스트
 # ======================================================================
 class Ctx:
-    """핸들러 공통 컨텍스트. graphs=층별 Graph dict — id 전역이라 노드 조회는 전 층 스캔."""
+    """핸들러 공통 컨텍스트. graphs=층별 Graph dict — id 전역이라 노드 조회는 전 층 스캔.
 
-    def __init__(self, graphs, dic, queue, chunks, doc, config, schema):
+    layers_cfg = 전 층 config(층 무관 조립용). entity 부착 시 대상 층의 category_pair_map을
+    쓰기 위해 필요(걸침 필드는 다른 층에 부착될 수 있음 — 정의서 §3.2, 명세 §15.7).
+    """
+
+    def __init__(self, graphs, dic, queue, chunks, doc, config, schema, layers_cfg=None):
         self.graphs = graphs
         self.dic = dic
         self.queue = queue
@@ -36,6 +40,7 @@ class Ctx:
         self.doc = doc
         self.config = config
         self.schema = schema
+        self.layers_cfg = layers_cfg or {config.get("layer"): config}
         self.record = None       # 현재 record (pass별로 설정)
         self.resolved = None     # 현재 record의 field->id (pass2)
 
@@ -216,6 +221,35 @@ def handle_meta(field, value, spec, ctx):
     return None
 
 
+def attach_entity(nid, category, spec, ctx, target_layer):
+    """(카테고리쌍→관계) 매핑으로 entity를 부착 대상에 연결 (명세 §5.3·§7-2, 정의서 §3.2).
+
+    부착 대상 = attach_to_field(명시) → 없으면 @process_ref(규칙B 폴백 — 공정좌표, 명세 §15.7).
+    관계 = 대상 층의 category_pair_map에서 양방향 조회('src,dst' 자연 방향). 매핑 없으면 부착 안 함.
+    부착 대상 미해소면 부착 드롭(레코드 보류 아님 — R13 연쇄: process_ref orphan → 부착 드롭).
+    """
+    attach_field = spec.get("attach_to_field")
+    target_id = ctx.resolved.get(attach_field) if attach_field else None
+    if target_id is None:
+        target_id = ctx.resolved.get("process_ref")          # 규칙B 폴백(공정좌표)
+    if target_id is None:
+        log.info("entity 부착 대상 미해소 — 부착 드롭(nid=%s)", nid)
+        return None
+    target_node = ctx.node(target_id)
+    if target_node is None:
+        return None
+    cpm = ctx.layers_cfg.get(target_layer, {}).get("category_pair_map", {})
+    tcat = target_node["category"]
+    if f"{category},{tcat}" in cpm:                           # 자연 방향 entity→대상
+        rel, src, dst = cpm[f"{category},{tcat}"], nid, target_id
+    elif f"{tcat},{category}" in cpm:                         # 자연 방향 대상→entity
+        rel, src, dst = cpm[f"{tcat},{category}"], target_id, nid
+    else:
+        return None                                          # 매핑 없음 — 부착 안 함(유무 무가정)
+    ctx.graphs[target_layer].add_edge(src, rel, dst, status="confirmed", provenance=ctx.prov())
+    return (src, rel, dst)
+
+
 HANDLERS = {
     "anchor": handle_anchor,
     "entity": handle_entity,
@@ -260,13 +294,19 @@ def ingest_doc(doc, schema, ctx):
                 resolved[f] = HANDLERS[spec["role"]](f, rec.get(f), spec, ctx)
         resolved_all.append(resolved)
 
-    # Pass2: attribute/content/meta 적용 + edges 후처리 (이 시점 문서 내 개체 모두 존재)
+    # Pass2: attribute/content/meta 적용 + 걸침 entity 부착 + edges 후처리 (문서 내 개체 모두 존재)
     for rec, resolved in zip(records, resolved_all):
         ctx.record = rec
         ctx.resolved = resolved
         for f, spec in fields.items():
             if spec["role"] in PASS2_ROLES:
                 HANDLERS[spec["role"]](f, rec.get(f), spec, ctx)
+        # 걸침 entity(target_layer ≠ 문서 층)는 (카테고리쌍→관계)로 대상 층에 부착(규칙B, §15.7)
+        for f, spec in fields.items():
+            if spec["role"] == "entity" and resolved.get(f) is not None:
+                tl = spec.get("target_layer") or layer
+                if tl != layer:
+                    attach_entity(resolved[f], spec["category"], spec, ctx, tl)
         _make_edges(schema.get("edges", []), resolved, ctx, graph)
 
 
@@ -276,11 +316,15 @@ def ingest_prose(doc, ctx):
     전 청크 원문 보존(링킹 0건도 — 하이브리드 서치 전제, §5.6.6). 언급 추출(LLM/MOCK)
     → 개체 판정 경로로 해소(신규는 auto 생성 + 큐) → describes 연결. 미해소 언급은 orphan_chunk_link.
     """
+    layer = ctx.schema.get("layer") or doc.get("layer")
+    skel_cat = ctx.config.get("skeleton", {}).get("category")
     for chunk in doc.get("chunks", []):
         ctx.record = chunk
-        ctx.resolved = {}
         cid = chunk["chunk_id"]
         mentions = llm.extract_mentions(chunk, ctx.config)          # MOCK: meta.mock_mentions
+        # 청크 공정좌표 해소 — prose 관계(카테고리쌍→관계)의 부착 앵커(§7-2)
+        ctx.resolved = {"process_ref": handle_anchor(
+            "process_ref", chunk.get("process_ref"), {"target_category": skel_cat}, ctx)}
         meta = {k: v for k, v in (chunk.get("meta") or {}).items() if k != "mock_mentions"}
         ctx.chunks.add_chunk(cid, doc["doc_id"], chunk.get("text", ""),
                              section=chunk.get("section"), meta=meta, linked=False)
@@ -289,6 +333,7 @@ def ingest_prose(doc, ctx):
             nid = handle_entity("(prose)", m.get("surface"), spec, ctx)
             if nid is not None:
                 ctx.chunks.add_describes(cid, nid)                  # 해소된 노드에 연결
+                attach_entity(nid, m["category"], spec, ctx, layer)  # 카테고리쌍→관계로 공정좌표 부착
             else:
                 ctx.enqueue("orphan_chunk_link", {"chunk_id": cid, "surface": m.get("surface")},
                             reason="prose 언급 미해소")

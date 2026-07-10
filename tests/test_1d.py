@@ -50,6 +50,10 @@ def test_1d():
         assert "주액기" in auto_surfaces, "P6 auto_node 큐"
         assert chunks.chunks["PPT01-P6"]["linked"] is True
         assert juak["id"] in chunks.nodes_for_chunk("PPT01-P6"), "P6 describes 주액기"
+        # prose 관계 생성((카테고리쌍→관계) 매핑): 주액기(Unit) part_of 전해액주입(Process) — §7-2
+        ea = _find(g, "전해액주입", "Process")
+        assert any(e["src"] == juak["id"] and e["rel"] == "part_of" and e["dst"] == ea["id"]
+                   for e in g.edges), "P6 주액기 part_of 전해액주입(prose 카테고리쌍 매핑)"
 
         # --- P1: 기존 노칭 프레스(CP 생성)에 describes (신규 아님) ---
         press = _find(g, "노칭 프레스", "Unit")

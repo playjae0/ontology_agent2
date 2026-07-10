@@ -93,7 +93,7 @@ def build_doc(doc, project_root, data_root):
                     parsed_at=doc.get("parsed_at", ""))
 
     # 인입 — payload_kind로 table(핸들러 루프) vs prose(추출→describes) 분기
-    ctx = ingest.Ctx(s.graphs, s.dic, s.queue, s.chunks, doc, config, schema)
+    ctx = ingest.Ctx(s.graphs, s.dic, s.queue, s.chunks, doc, config, schema, s.layers_cfg)
     if doc.get("payload_kind") == "prose":
         ingest.ingest_prose(doc, ctx)
     else:
