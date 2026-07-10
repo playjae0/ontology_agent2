@@ -28,7 +28,7 @@
       "규격": {"min": -0.3, "center": 0, "max": 0.3, "unit": "mm"},
       "측정방법": "비전 정렬 검사", "대응계획": "정렬도 이탈 시 센서 재교정" },
 
-    { "chunk_id": "CP01-C5", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "both",
+    { "chunk_id": "CP01-C5", "process_group": "조립", "process_ref": "cathode 탭용접", "electrode_type": "both",
       "설비": "초음파 융착기", "관리항목": "용접 가압력",
       "규격": {"center": 0.3, "unit": "MPa"},
       "측정방법": "로드셀, 전수", "대응계획": "가압력 이탈 시 혼 점검" },

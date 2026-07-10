@@ -70,7 +70,7 @@ def plant_skeletons(project_root, data_root):
     s = Stores(project_root, data_root)
     for layer, cfg in s.layers_cfg.items():
         if "skeleton" in cfg:
-            skeleton.plant(s.graphs[layer], cfg["skeleton"], s.dic)
+            skeleton.plant(s.graphs[layer], cfg["skeleton"], s.dic, polarity=cfg.get("polarity"))
     s.save()
     log.info("plant_skeletons 완료: %s", list(s.layers_cfg))
     return s

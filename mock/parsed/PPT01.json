@@ -20,7 +20,7 @@
       "section": "슬라이드 6", "text": "적층 정렬도는 셀 성능에 직결된다. 비전 정렬 검사로 편차를 관리한다.",
       "meta": {"mock_mentions": [{"surface": "적층 정렬도", "category": "Property"}]} },
 
-    { "chunk_id": "PPT01-P4", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "both",
+    { "chunk_id": "PPT01-P4", "process_group": "조립", "process_ref": "cathode 탭용접", "electrode_type": "both",
       "section": "슬라이드 8", "text": "2025년 3월 기준 용접 불량률 0.3%, 가압력 0.3MPa, 진폭 20um 조건에서 운전.",
       "meta": {"mock_mentions": []} },
 

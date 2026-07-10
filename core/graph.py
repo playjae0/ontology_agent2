@@ -127,7 +127,16 @@ class Graph:
         result = set()
         for rel, spec in traverse_spec.items():
             direction = spec.get("direction", "both")
-            recursive = bool(spec.get("recursive", False))
+            recursive = spec.get("recursive", False)
+            # 명시적 실패(§3.6 탈출구) — config가 준 방향/재귀가 지원 집합 밖이면 조용히 넘기지 않고 raise
+            if direction not in ("out", "in", "both"):
+                raise ValueError(
+                    f"neighbors: 미지원 traverse direction '{direction}' (rel={rel}) — "
+                    f"config 표현 밖, core 패턴 추가 필요 (§3.6)")
+            if recursive not in (True, False):
+                raise ValueError(
+                    f"neighbors: 미지원 traverse recursive '{recursive}' (rel={rel}) — "
+                    f"config 표현 밖, core 패턴 추가 필요 (§3.6)")
             visited = set(ids)
             frontier = set(ids)
             while frontier:

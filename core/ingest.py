@@ -392,6 +392,10 @@ def apply_mirrors(graph, config, queue, doc_id, parsed_at=""):
         log.warning("mirrors enabled이나 polarity.values 2종 아님 — 건너뜀")
         return
     a_val, b_val = values[0], values[1]
+    # 형제(순서) 관계는 자식 대칭 비교에서 제외 — precedes 순차가 극성 Process 쌍의 오탐 비대칭을
+    # 만들지 않게(명세 §5.3은 "자식(part_of/has_property) 수·구성" 비교). 관계명은 config에서.
+    sibling_rel = config.get("skeleton", {}).get("relations", {}).get("sibling")
+    skip_rels = {relation} | ({sibling_rel} if sibling_rel else set())
 
     def strip(canon):
         for v in values:
@@ -419,9 +423,9 @@ def apply_mirrors(graph, config, queue, doc_id, parsed_at=""):
         for x in cath:
             for y in anod:
                 graph.add_edge(x, relation, y, status="auto", provenance=["auto:mirror_rule"])
-        # self-heal ②: 극성별 자식 시그니처 합집합 비교(짝 측 노드는 제외) → 대칭이면 항목 없음
-        cath_sig = set().union(*(_incident_sig(graph, x, set(anod), strip, relation) for x in cath))
-        anod_sig = set().union(*(_incident_sig(graph, y, set(cath), strip, relation) for y in anod))
+        # self-heal ②: 극성별 자식 시그니처 합집합 비교(짝 측 노드·형제관계 제외) → 대칭이면 항목 없음
+        cath_sig = set().union(*(_incident_sig(graph, x, set(anod), strip, skip_rels) for x in cath))
+        anod_sig = set().union(*(_incident_sig(graph, y, set(cath), strip, skip_rels) for y in anod))
         only_a, only_b = cath_sig - anod_sig, anod_sig - cath_sig
         if only_a or only_b:
             queue.add("mirror_asymmetry",
@@ -432,11 +436,11 @@ def apply_mirrors(graph, config, queue, doc_id, parsed_at=""):
                       doc_id, "극성 대칭 선언 후 자식 수·구성 불일치(문서 누락 vs 진짜 차이)", parsed_at)
 
 
-def _incident_sig(graph, nid, exclude, strip, mirror_rel):
-    """노드에 걸린 엣지 시그니처 = {(rel, 방향, 극성제거 상대 canonical)}. mirror 엣지·짝은 제외."""
+def _incident_sig(graph, nid, exclude, strip, skip_rels):
+    """노드에 걸린 엣지 시그니처 = {(rel, 방향, 극성제거 상대 canonical)}. skip_rels·짝 노드·툼스톤 제외."""
     sig = set()
     for e in graph.edges:
-        if e["rel"] == mirror_rel or e.get("status") == "deleted_by_user":
+        if e["rel"] in skip_rels or e.get("status") == "deleted_by_user":
             continue
         if e["src"] == nid and e["dst"] not in exclude:
             other = graph.nodes.get(e["dst"])

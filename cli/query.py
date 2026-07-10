@@ -70,7 +70,9 @@ def route(question, project_root=PROJECT_ROOT, data_root=None):
         expanded = query.flow_scope(cfg, g) if is_flow else query.expand(ids, cfg, g)
         scope = set(ids) | set(expanded)
         all_scope |= scope
-        all_facts += query.graph_facts(scope, g, cfg)
+        # cross-layer 관계는 브리지가 단독 문장화(전역 canonical) — per-layer에선 제외(§8-R1 책임분리)
+        skip = set(cfg.get("cross_layer_traverse", {}))
+        all_facts += query.graph_facts(scope, g, cfg, skip_relations=skip)
         cids, trunc = query.collect_chunks(ids, expanded, s.chunks)
         all_chunks += cids
         truncated_any = truncated_any or trunc

@@ -40,8 +40,9 @@ def test_2():
         r5 = qcli.route(by_id[5]["question"], ROOT, data_root)
         assert r5["is_flow"] is True
         facts = "\n".join(r5["graph_facts"])
-        for a, b in [("노칭", "스태킹"), ("스태킹", "탭용접"), ("탭용접", "패키징"),
-                     ("패키징", "전해액주입"), ("전해액주입", "실링")]:
+        # 극성 잔존 공정(탭용접)도 단일 스트림 — cathode→anode 순차(§5.2 ②)
+        for a, b in [("노칭", "스태킹"), ("스태킹", "cathode 탭용접"), ("cathode 탭용접", "anode 탭용접"),
+                     ("anode 탭용접", "패키징"), ("패키징", "전해액주입"), ("전해액주입", "실링")]:
             assert f"{a} 다음 공정은 {b}" in facts, f"flow precedes {a}->{b} 누락"
 
         # --- Q2(3) 구조: precedes 사실 ---

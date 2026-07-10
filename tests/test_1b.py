@@ -29,12 +29,13 @@ def test_1b():
         g = Graph("process", ids)
         dic = Dictionary(root / "dictionary.json")
 
-        skeleton.plant(g, config["skeleton"], dic)
+        skeleton.plant(g, config["skeleton"], dic, polarity=config.get("polarity"))
 
+        # 극성 잔존 공정(탭용접) 분기로 세부공정 7개 → Process 8, part_of 7, precedes 6
         procs = [n for n in g.nodes.values() if n["category"] == "Process"]
-        assert len(procs) == 7, f"Process 노드 7개 기대, 실제 {len(procs)}"
-        assert _count(g, "part_of") == 6, f"part_of 6 기대, 실제 {_count(g,'part_of')}"
-        assert _count(g, "precedes") == 5, f"precedes 5 기대, 실제 {_count(g,'precedes')}"
+        assert len(procs) == 8, f"Process 노드 8개 기대, 실제 {len(procs)}"
+        assert _count(g, "part_of") == 7, f"part_of 7 기대, 실제 {_count(g,'part_of')}"
+        assert _count(g, "precedes") == 6, f"precedes 6 기대, 실제 {_count(g,'precedes')}"
 
         # 전부 confirmed·seed provenance (Tier1)
         for n in g.nodes.values():
@@ -43,17 +44,21 @@ def test_1b():
 
         # canonical -> id 맵
         by_name = {n["canonical"]: nid for nid, n in g.nodes.items()}
-        assert set(by_name) == {"조립", "노칭", "스태킹", "탭용접", "패키징", "전해액주입", "실링"}
+        leaves = ["노칭", "스태킹", "cathode 탭용접", "anode 탭용접", "패키징", "전해액주입", "실링"]
+        assert set(by_name) == {"조립", *leaves}
+
+        # 극성 잔존 공정 골격 노드에 electrode_type 부여(§5.2 ② — mirrors 전제)
+        assert g.nodes[by_name["cathode 탭용접"]].get("electrode_type") == "cathode"
+        assert g.nodes[by_name["anode 탭용접"]].get("electrode_type") == "anode"
 
         # part_of: 각 세부공정 -> 조립 (src=child, dst=parent)
         assembly = by_name["조립"]
-        for leaf in ("노칭", "스태킹", "탭용접", "패키징", "전해액주입", "실링"):
+        for leaf in leaves:
             assert any(e["src"] == by_name[leaf] and e["rel"] == "part_of" and e["dst"] == assembly
                        for e in g.edges), f"{leaf} part_of 조립 누락"
 
-        # precedes 체인이 seed 나열 순서: 노칭→스태킹→탭용접→패키징→전해액주입→실링
-        order = ["노칭", "스태킹", "탭용접", "패키징", "전해액주입", "실링"]
-        for a, b in zip(order, order[1:]):
+        # precedes 체인이 seed 나열 순서(단일 스트림 — 극성 잔존 공정도 순차)
+        for a, b in zip(leaves, leaves[1:]):
             assert any(e["src"] == by_name[a] and e["rel"] == "precedes" and e["dst"] == by_name[b]
                        for e in g.edges), f"precedes {a}->{b} 누락"
 
@@ -64,9 +69,9 @@ def test_1b():
         assert dic.lookup("노칭") == [by_name["노칭"]]
         assert dic.lookup("조립") == [assembly]
 
-        # down 확장(part_of 자식 재귀): 조립 -> 6 세부공정
+        # down 확장(part_of 자식 재귀): 조립 -> 7 세부공정
         down = g.neighbors([assembly], {"part_of": {"direction": "in", "recursive": True}})
-        assert down == {by_name[x] for x in order}, f"조립 down 확장: {down}"
+        assert down == {by_name[x] for x in leaves}, f"조립 down 확장: {down}"
 
     # flat 타입도 심어지는지(품질층 골격 형태) — 엣지 0
     with tempfile.TemporaryDirectory() as tmp:

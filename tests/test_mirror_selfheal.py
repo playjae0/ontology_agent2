@@ -25,7 +25,9 @@ def _load(name):
 
 
 def _n_asym(s):
-    return len(s.queue.by_kind("mirror_asymmetry"))
+    # 노칭 프레스 극성 쌍의 asymmetry만 계수(탭용접 극성 공정 쌍과 분리 — 이 테스트 대상은 노칭 프레스)
+    return sum(1 for i in s.queue.by_kind("mirror_asymmetry")
+               if i["payload"].get("base") == "노칭 프레스")
 
 
 def test_mirror_selfheal():

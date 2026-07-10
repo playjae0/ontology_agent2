@@ -52,3 +52,13 @@
 - **(가) mirror self-heal 수정**: `apply_mirrors`를 매 build 재평가로 전환 — 이 층 mirror_asymmetry 항목 걷어내고 현재 상태로 재작성. (category, 극성제거 canonical) 그룹당 1건, **극성별 자식 시그니처 합집합** 비교(중복 노드에도 강건). 재인입→1 유지(폭증 없음), 대칭 회복→0. `test_mirror_selfheal` 검증. (이전 "첫 감지만" 픽스를 대체 — self-heal 부재 문제 해결.)
 - **(나) 재인입 노드 중복+stale 큐**: KNOWN_ISSUES.md 기록, 단위 5(재인입 회수 규칙 정밀화)에서 구현. 단위 1a~3 산출물엔 영향 없음(문서 1회 인입).
 - core self-heal 수정은 층 어휘 없음(config 구동) — config-only 성질 유지(quality 격리해도 process 파이프라인 정상).
+
+## 검수 라운드 2 (REVIEW_단위3.md) + 조치
+- 감사(읽기): 구조·범용성(core 층 어휘 0, quality 코드 0)·그래프 무결성(극성·병합·맥락형 attr·provenance §0-5) 견고. 질의 12문항 expected_path 일치.
+- **조치 3건 (테스트 추가·통과, 8개 테스트 전부 OK)**:
+    - **(다)** cross-layer 사실 이중 렌더/raw id → `graph_facts.skip_relations` + 라우터가 per-layer에서 cross_layer 관계 제외, 브리지 단독 문장화. `test_review2` 검증.
+    - **(라-1)** 다중 occurs_in → mock에 이물 혼입(노칭·실링 2행) + Q13. **(라-2)** 극성 잔존 공정 → 골격 cathode/anode 탭용접 + Process급 mirrors + flow 단일 스트림.
+    - **(마)** §3.6 명시적 실패 → neighbors가 미지원 direction/recursive에 raise.
+- **(라-2)가 요구한 core 보강 2건**(§3.6 관찰): skeleton.plant 극성 electrode_type 부여 + apply_mirrors 형제(precedes) 관계 자식비교 제외. **§5.2 ② Process급 극성은 config-only 표현 밖**이었다는 실측 — 둘 다 config 구동·층 어휘 없음. config-only(quality 추가 무수정) 성질은 유지.
+- (나) 재인입은 명세 v1.11 §5.5-3(회수/보존/재평가 3분류)대로 **단위 5 유지**.
+- 골격 변경(탭용접→극성 2노드) 반영: Process 8·part_of 7·precedes 6. test_1b·2·mirror_selfheal 갱신.

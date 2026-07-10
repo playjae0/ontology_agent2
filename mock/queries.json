@@ -10,5 +10,6 @@
   {"id": 9,  "type": "Q5-cross", "question": "노칭에서 발생할 수 있는 불량은?",     "expected_path": "graph_fact"},
   {"id": 10, "type": "cross", "question": "단락으로 이어질 수 있는 불량은 뭐가 있어?", "expected_path": "graph_fact"},
   {"id": 11, "type": "Q8", "question": "노칭이 영어로 뭐야?",                      "expected_path": "general_knowledge"},
-  {"id": 12, "type": "Q8", "question": "리튬이온 배터리 동작 원리 설명해줘",        "expected_path": "general_knowledge"}
+  {"id": 12, "type": "Q8", "question": "리튬이온 배터리 동작 원리 설명해줘",        "expected_path": "general_knowledge"},
+  {"id": 13, "type": "Q5-cross", "question": "이물 혼입은 어느 공정에서 발생해?",     "expected_path": "graph_fact"}
 ]

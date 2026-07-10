@@ -8,8 +8,9 @@
   "skeleton": {
     "type": "tree",
     "category": "Process",
-    "data": {"조립": ["노칭", "스태킹", "탭용접", "패키징", "전해액주입", "실링"]},
-    "relations": {"child": "part_of", "sibling": "precedes"}
+    "data": {"조립": ["노칭", "스태킹", "cathode 탭용접", "anode 탭용접", "패키징", "전해액주입", "실링"]},
+    "relations": {"child": "part_of", "sibling": "precedes"},
+    "_note": "탭용접은 극성 잔존 공정(§5.2 ②) — cathode/anode 순차(precedes) 단일 스트림 + Process급 mirrors"
   },
   "mirrors": {"enabled": true, "relation": "mirrors"},
   "polarity": {"field": "electrode_type", "values": ["cathode", "anode"], "bind_categories": ["Unit", "Property"]},

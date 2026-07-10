@@ -24,7 +24,12 @@
 
 ---
 
-## (다) cross-layer 사실 이중 렌더 + raw id 노출  [중] — 검수 라운드2 신규
+## (다) cross-layer 사실 이중 렌더 + raw id 노출  [중] — ✅ 해결(검수 라운드2)
+
+> **해결**: `core/query.graph_facts`에 `skip_relations` 추가, `cli/query.route` per-layer 호출이 그 층의
+> `cross_layer_traverse` 관계를 넘겨 제외 → cross-layer 사실은 브리지(`_AllGraphsView` 전역 canonical)가
+> 단독 문장화(§8-R1 책임분리). 검증 `test_review2.test_da_crosslayer_render`(Q10 raw id 0, occurs_in 1회씩).
+
 
 **증상**: 상위층(quality)에 링크되는 cross-layer 질의에서 같은 엣지가 **두 번**, 그중 하나는 dst가 canonical이 아닌 **node id**로 렌더된다. 실측 Q10("단락으로 이어질 불량"): `절연 파괴는 N0002 공정에서 발생한다`(깨짐) + `절연 파괴는 노칭 공정에서 발생한다`(정상)가 함께 출력.
 
@@ -36,7 +41,13 @@
 
 **검증**: Q10 그래프 사실에 `N0002/N0003` 등 id 문자열 0건, occurs_in 사실이 canonical로 1회씩만.
 
-## (라) 다중 occurs_in · 극성 잔존 공정(Process급) 미실증  [중·커버리지] — 검수 라운드2 신규
+## (라) 다중 occurs_in · 극성 잔존 공정(Process급) 미실증  [중·커버리지] — ✅ 해결(검수 라운드2)
+
+> **해결**:
+> - **다중 occurs_in**: mock/PFMEA01에 `이물 혼입`을 노칭(R14)·실링(R15) 2행에 failure_mode로 배치 → occurs_in 2건. 질의 Q13("이물 혼입은 어느 공정에서?") 2공정 응답. 검증 `test_review2.test_ra1_multi_occurs_in`.
+> - **극성 잔존 공정**: 골격에 `cathode 탭용접`/`anode 탭용접` 순차(precedes) + Process급 mirrors. flow 단일 스트림 유지. 검증 `test_review2.test_ra2_polarity_residual_process`.
+> - **⚠️ 이 항목은 config/mock만으로 안 됐음 — core 보강 2건 필요(§3.6 관찰)**: (1) `skeleton.plant`가 극성 접두 골격 노드에 electrode_type 부여(mirrors 전제), (2) `apply_mirrors`가 형제(sibling=precedes) 관계를 자식 대칭 비교에서 제외(순차 precedes가 오탐 비대칭 유발 방지, §5.3 "자식(part_of/has_property) 비교"). 둘 다 config 구동·층 어휘 없음이나, **§5.2 ② Process급 극성은 config-only 표현 밖**이었다는 실측(Rule of Three 관찰 데이터). 명세 §5.2/§5.3 반영 검토 후보.
+
 
 **증상**: 명세 §8-1 핵심 메커니즘 2개가 mock에서 실증되지 않음.
 - **다중 occurs_in**("한 불량이 여러 공정에서 발생 → occurs_in 다중, '이 불량 유발 공정들' 질의의 답"): 실측상 **어떤 Failure도 occurs_in 2개+ 없음**. §6.1 R11이 지목한 실증자 `이물 유입`은 R3·R11 모두 *cause*라 occurs_in(=failure_mode 전용) 대상이 아니어서 0건.
@@ -48,7 +59,10 @@
 
 **검증**: 다중 occurs_in Failure ≥1, Q("이 불량 유발 공정들") 응답에 2개 공정, 극성 Process 쌍 mirrors + flow 단일 스트림.
 
-## (마) §3.6 명시적 실패 불완전(query traverse)  [하] — 검수 라운드2 신규
+## (마) §3.6 명시적 실패 불완전(query traverse)  [하] — ✅ 해결(검수 라운드2)
+
+> **해결**: `core/graph.neighbors`가 config가 준 `direction`이 {out,in,both} 밖이거나 `recursive`가 {True,False} 밖이면 raise("config 표현 밖 — core 패턴 추가 필요", §3.6). `query.expand`는 neighbors 호출이라 전파. 검증 `test_review2.test_ma_explicit_failure`.
+
 
 **증상**: config로 표현 안 되는 것이 "시끄럽게" 드러나야 하나(§3.6 탈출구), query traverse의 미지원 방향/패턴은 **silent**(빈 결과)로 넘어간다. skeleton.type은 raise(정상)지만 `graph.neighbors`/`query.expand`는 알 수 없는 direction을 만나면 매칭 0건 반환.
 

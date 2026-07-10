@@ -17,7 +17,7 @@ core/                    A층 — 층 어휘 0. config 순회 파이프라인
   llm.py                 게이트웨이/추출 USE_MOCK 분기(실물 경로는 raise)
   store.py               ChunkStore·ReviewQueue(수정 큐, remove/by_kind)
   ingest.py              role 5핸들러+edges 후처리+검증+attach_entity+apply_mirrors(self-heal)+reinject
-  build.py               스키마 블록조립·범용 쓰기 파이프라인(plant_skeletons/build_doc/Stores)
+  build.py               스키마 블록조립·범용 쓰기 파이프라인(plant_skeletons /build_doc/Stores)
   skeleton.py            범용 골격(tree|flat), 미지원 type→raise
   query.py               읽기 파이프라인(link·expand·collect·graph_facts·flow_scope)
 router.py                층 폴더 자동 발견(등록 코드 없음)
@@ -79,7 +79,10 @@ PROGRESS.md BLOCKERS.md KNOWN_ISSUES.md
 ## E. 종합 판정
 
 ### E1. 어긋나거나 의심스러운 지점 (심각도 순)
-1. **[중] cross-layer 사실 이중 렌더 + raw id** — `cli/query.py` route()의 per-layer `all_facts += query.graph_facts(scope, g, cfg)`가 단일 층 그래프만 봐서, cross-layer 엣지(occurs_in 등)의 타 층 dst를 canonical이 아닌 **node id로 렌더**. 브리지(`_bridge`)는 `_AllGraphsView`로 전역 해소 → 같은 엣지가 **id버전+canonical버전 이중** 출력. 실측 Q10: "절연 파괴는 **N0002** 공정에서 발생한다" + "절연 파괴는 **노칭** 공정에서 발생한다". 상위층에 링크되는 질의(Q10형)에서 사용자에게 깨진 사실 노출. **그래프 데이터는 정상 — 라우터 렌더만 문제.** → KNOWN_ISSUES (다).
+
+> **조치 완료(검수 라운드2)**: 1(다)·2·3(라)·4(마)는 코드+mock+테스트로 **해결**(8개 테스트 통과, KNOWN_ISSUES 해결 표시). (나) 재인입만 단위 5 유지. 5·6은 설계/문서화된 MOCK 한계라 조치 불요. (라-2 극성 잔존 공정은 config-only 표현 밖이라 core 보강 2건 수반 — KNOWN_ISSUES (라) 참조.)
+
+1. **[중] ✅해결 cross-layer 사실 이중 렌더 + raw id** — `cli/query.py` route()의 per-layer `all_facts += query.graph_facts(scope, g, cfg)`가 단일 층 그래프만 봐서, cross-layer 엣지(occurs_in 등)의 타 층 dst를 canonical이 아닌 **node id로 렌더**. 브리지(`_bridge`)는 `_AllGraphsView`로 전역 해소 → 같은 엣지가 **id버전+canonical버전 이중** 출력. 실측 Q10: "절연 파괴는 **N0002** 공정에서 발생한다" + "절연 파괴는 **노칭** 공정에서 발생한다". 상위층에 링크되는 질의(Q10형)에서 사용자에게 깨진 사실 노출. **그래프 데이터는 정상 — 라우터 렌더만 문제.** → KNOWN_ISSUES (다).
 2. **[중·커버리지] 다중 occurs_in 미실증** — §8-1 핵심 메커니즘("이 불량 유발 공정들" 질의)이 mock에서 0. 코드엔 다중 occurs_in 능력 있으나(같은 failure_mode가 2개 공정에 등장하면 성립) 어떤 mock 행도 안 만듦. 지목된 실증자 이물 유입은 cause라 불가. → KNOWN_ISSUES (라).
 3. **[하·커버리지] 극성 잔존 공정(Process급) 미실증** — §5.2 ②(cathode 탭용접/anode 탭용접 precedes 순차 + mirrors)가 골격에 없음(단일 탭용접). flow는 자명하게 단일 스트림. Process급 극성 분기·합류 검증 안 됨. → KNOWN_ISSUES (라).
 4. **[하] §3.6 명시적 실패 불완전** — skeleton.type만 raise, query traverse 미지원 방향/패턴은 silent(빈 결과). config 표현 밖이 "시끄럽게" 드러나지 않음. → KNOWN_ISSUES (마).
@@ -87,8 +90,8 @@ PROGRESS.md BLOCKERS.md KNOWN_ISSUES.md
 6. **[하·mock데이터] 규칙B 저해상도 부착** — R9(패키징 행)의 control_item 실링 온도 → `패키징 has_property 실링 온도`(실링온도의 자연 소속은 실링). 규칙B는 행 process_ref에 무조건 부착(저해상도, CP가 정밀화)이므로 메커니즘은 정상, mock 데이터 의미상 어색.
 
 ### E2. 플랫폼(뷰어) 붙이기 전 조치
-- **(다) cross-layer 렌더 버그만 먼저 고치면 됨** — 뷰어가 그래프 사실을 그대로 보여줄 때 "N0002 공정" 같은 깨진 문자열이 노출되므로 시각화 전 수정 권장(라우터 1곳, core 무관). 나머지(라·마)는 커버리지/견고성이라 플랫폼과 병행·이후 가능.
-- 그래프 데이터·질의 경로 자체는 믿을 만함 → 렌더 버그 처리 후 **바로 시각화로 가도 됨**.
+- **(다)(라)(마) 모두 조치 완료** — cross-layer 렌더 버그 해소(뷰어에 깨진 "N0002 공정" 안 나옴), mock 커버리지 보강(다중 occurs_in·극성 잔존 공정), 명시적 실패 완성.
+- 그래프 데이터·질의 경로 믿을 만함 + 렌더 정상화 → **바로 시각화(단위 4)로 가도 됨**. 남은 잠재 이슈는 (나) 재인입(단위5)·E1-5·6(문서화된 MOCK 한계).
 
 ### E3. 실물 규모에서 문제 될 것 (성능·확장)
 - **선형 스캔 다발**: `graph.neighbors`·`edges_incident`·`graph_facts`가 매 호출 전 엣지 순회. 질의 1회에 관계×엣지 스캔. 10만+ 엣지에서 질의 지연. (인덱스 없음 — 현재 mock은 무해.)

@@ -37,12 +37,12 @@
       "control_item_for_cause": "흡착 압력",
       "prevention_control": "흡착 압력을 관리한다.", "detection_control": "적층 상태 검사." },
 
-    { "chunk_id": "PFMEA01-R7", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "cathode",
+    { "chunk_id": "PFMEA01-R7", "process_group": "조립", "process_ref": "cathode 탭용접", "electrode_type": "cathode",
       "failure_mode": "용접 강도 부족", "cause": "가압력 부족", "effect_category": "방전기능상실", "severity": 8,
       "control_item_for_cause": "용접 가압력",
       "prevention_control": "가압력을 관리한다.", "detection_control": "용접 강도 시험." },
 
-    { "chunk_id": "PFMEA01-R8", "process_group": "조립", "process_ref": "탭용접", "electrode_type": "anode",
+    { "chunk_id": "PFMEA01-R8", "process_group": "조립", "process_ref": "anode 탭용접", "electrode_type": "anode",
       "failure_mode": "용접 강도 부족", "cause": "진폭 이상", "effect_category": "방전기능상실", "severity": 8,
       "control_item_for_cause": "용접 진폭",
       "prevention_control": "진폭을 모니터링한다.", "detection_control": "용접 강도 시험." },
@@ -70,6 +70,16 @@
     { "chunk_id": "PFMEA01-R13", "process_group": "조립", "process_ref": "레이저노칭", "electrode_type": "cathode",
       "failure_mode": "슬리팅 버", "cause": "빔 출력 편차", "effect_category": "단락", "severity": 9,
       "control_item_for_cause": "빔 출력",
-      "prevention_control": "빔 출력을 안정화한다.", "detection_control": "버 검사." }
+      "prevention_control": "빔 출력을 안정화한다.", "detection_control": "버 검사." },
+
+    { "chunk_id": "PFMEA01-R14", "process_group": "조립", "process_ref": "노칭", "electrode_type": "both",
+      "failure_mode": "이물 혼입", "cause": "설비 청정도 저하", "effect_category": "단락", "severity": 9,
+      "control_item_for_cause": "청정도 관리",
+      "prevention_control": "설비 청정도를 관리한다.", "detection_control": "이물 검사." },
+
+    { "chunk_id": "PFMEA01-R15", "process_group": "조립", "process_ref": "실링", "electrode_type": "both",
+      "failure_mode": "이물 혼입", "cause": "이송 중 오염", "effect_category": "화재", "severity": 9,
+      "control_item_for_cause": "이송 청정도",
+      "prevention_control": "이송 경로 청정도를 관리한다.", "detection_control": "이물 검사." }
   ]
 }

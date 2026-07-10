@@ -89,12 +89,20 @@ def _by_recent(chunk_ids, chunks):
 # ----------------------------------------------------------------------
 # 4) 그래프 사실 문장화 — 엣지 + 노드 attrs (config.fact_templates)
 # ----------------------------------------------------------------------
-def graph_facts(scope, graph, config):
-    """scope(노드 id 집합)에 걸린 엣지·필드를 fact_templates로 문장화. 맥락형 attr은 context별 한 줄."""
+def graph_facts(scope, graph, config, skip_relations=None):
+    """scope(노드 id 집합)에 걸린 엣지·필드를 fact_templates로 문장화. 맥락형 attr은 context별 한 줄.
+
+    skip_relations: 이 관계의 엣지는 문장화에서 제외(값=관계명 집합). cross-layer 엣지는
+    타 층 노드가 dst라 이 그래프의 canonical로 못 풀리므로, 라우터가 per-layer 호출 시 그 층의
+    cross_layer_traverse 관계를 넘겨 제외하고 브리지가 전역 뷰로 단독 문장화한다(명세 §8-R1·§8-R4).
+    """
     templates = config.get("fact_templates", {})
+    skip = set(skip_relations or ())
     facts = []
     seen = set()
     for e in graph.edges_incident(scope):
+        if e["rel"] in skip:
+            continue
         tmpl = templates.get(e["rel"])
         if not tmpl:
             continue
