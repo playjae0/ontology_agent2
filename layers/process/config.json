@@ -1,0 +1,38 @@
+{
+  "layer": "process",
+  "categories": {
+    "Process":  "제품을 만들기 위해 수행하는 작업 단계. 기능으로 정의되며 설비 기종이 바뀌어도 존재한다(예: 노칭, 스태킹). 설비 이름이 아니라 '하는 일'의 이름.",
+    "Unit":     "공정을 수행하는 물리 장비의 기종/표준 명칭(예: 노칭 프레스). 지그·금형 등 도구류 포함. 호기·특정 공장 개체는 제외.",
+    "Property": "공정/설비에서 관리·측정·통제되는 항목의 이름(예: 노칭 정밀도). 관리항목/특성/CTQ 포함. 규격값·측정값·판정결과는 제외(attribute)."
+  },
+  "skeleton": {
+    "type": "tree",
+    "category": "Process",
+    "data": {"조립": ["노칭", "스태킹", "탭용접", "패키징", "전해액주입", "실링"]},
+    "relations": {"child": "part_of", "sibling": "precedes"}
+  },
+  "mirrors": {"enabled": true},
+  "relations": ["part_of", "precedes", "has_property", "mirrors"],
+  "category_pair_map": {
+    "Unit,Process": "part_of",
+    "Process,Property": "has_property",
+    "Unit,Property": "has_property"
+  },
+  "match_threshold": 0.85,
+  "query_traverse": {
+    "part_of":      {"down": {"direction": "in",  "recursive": true},  "up": {"direction": "out", "recursive": false}},
+    "has_property": {"both": {"direction": "both", "recursive": false}}
+  },
+  "fact_templates": {
+    "part_of": "{src}는 {dst}의 하위 요소이다",
+    "precedes": "{src} 다음 공정은 {dst}이다",
+    "has_property": "{src}의 관리인자: {dst}",
+    "mirrors": "{src}는 {dst}와(과) 극성 대칭 공정/설비이다",
+    "attr:spec": "{node}의 규격: {value} (출처: {prov})"
+  },
+  "_fact_note": "맥락형 attr(spec 등)은 context 그룹별 한 줄씩 렌더: '[model=M1] 규격: ...'. mirrors는 query_traverse 기본 미포함(비대칭 조회 시에만 명시적 확장 — HOOK).",
+  "prompts": {
+    "extract": "(명세 §5.4-1 규칙 — 정의문 3종 삽입, 주제만, 목록 밖 버림, 애매하면 제외)",
+    "judge":   "(명세 §5.4-2 규칙 — 의미 판단, 표기 변형 안내, 비대칭: 확신 없으면 uncertain)"
+  }
+}

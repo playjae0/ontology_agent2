@@ -12,7 +12,7 @@
 | 단위 | 상태 | 테스트 | 비고 |
 |---|---|---|---|
 | 1a core/graph·dictionary·id_seq + init | ✅ | test_1a OK | id 전역유일·복원·사전 왕복·neighbors |
-| 1b skeleton + process config.skeleton | 대기 | — | |
+| 1b skeleton + process config.skeleton | ✅ | test_1b OK | Process 7·part_of 6·precedes 5, flat 타입 |
 | 1c ingest+matcher+build + cp.json | 대기 | — | |
 | 1d content 경로 + PPT01 | 대기 | — | |
 | 2 query + router + cli/query + queries | 대기 | — | |
@@ -21,3 +21,4 @@
 ## 로그
 - (셋업 완료) 1a 착수.
 - 1a ✅ — core/graph.py(IdSeq·Graph·init_data_tree), core/dictionary.py. test_1a 통과.
+- 1b ✅ — core/skeleton.py(tree|flat 범용), layers/process/config.json. test_1b 통과(Process 7·part_of 6·precedes 5).
