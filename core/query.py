@@ -27,17 +27,47 @@ def link(question, dic):
 
     소비: 구축 때 쌓인 동의어가 질의 히트율로 회수되는 지점. 읽기 전용(P6) — 사전 미갱신.
     2단(사전 미스 시 LLM 언급 추출) / 3단(임베딩 청크 검색)은 HOOK(명세 §5.6.1·§5.6.6).
+
+    단어 경계 근사(v1.12 F12): 매칭 위치의 왼쪽이 글자(한글·영숫자)와 연속이면 복합어의
+    일부("레이저노칭" 안의 "노칭")로 보고 제외. 오른쪽은 라틴 영숫자 연속만 제외 —
+    한글은 조사 부착("노칭에서", "이물 혼입은")이 정상이므로 허용.
     """
     surfaces = sorted({s for s in dic.surfaces() if s}, key=len, reverse=True)
     remaining = question
     linked = []
     for surf in surfaces:
-        if surf in remaining:
+        idx, hit = 0, False
+        while True:
+            i = remaining.find(surf, idx)
+            if i < 0:
+                break
+            if _word_boundary(remaining, i, len(surf)):
+                hit = True
+                # 긴 표면형 소거(부분 재매칭 방지) — 해당 위치만 공백화
+                remaining = remaining[:i] + " " * len(surf) + remaining[i + len(surf):]
+                idx = i + len(surf)
+            else:
+                idx = i + 1
+        if hit:
             for nid in dic.lookup(surf):
                 if nid not in linked:
                     linked.append(nid)
-            remaining = remaining.replace(surf, " " * len(surf))  # 긴 표면형 소거(부분 재매칭 방지)
     return linked
+
+
+def _word_boundary(text, i, length):
+    """매칭 경계 검사(F12) — 왼쪽: 글자 연속이면 복합어 일부. 오른쪽: 라틴 영숫자 연속만 차단."""
+    left = text[i - 1] if i > 0 else ""
+    right = text[i + length] if i + length < len(text) else ""
+    if left and left.isalnum():
+        return False
+    if right and right.isalnum() and not _is_hangul(right):
+        return False
+    return True
+
+
+def _is_hangul(c):
+    return "가" <= c <= "힣" or "ㄱ" <= c <= "ㅣ"
 
 
 # ----------------------------------------------------------------------

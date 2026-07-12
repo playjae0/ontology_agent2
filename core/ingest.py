@@ -81,35 +81,90 @@ def _empty(value):
 # 핸들러 5종 (정의서 §3)
 # ======================================================================
 def handle_anchor(field, value, spec, ctx):
-    """닻 — 이미 존재하는 골격 노드 조회. auto 생성 폴백 금지(골격=Tier1, §3.1). 미스→orphan_anchor."""
+    """닻 — 이미 존재하는 골격 노드 조회. auto 생성 폴백 금지(골격=Tier1, §3.1). 미스→orphan_anchor.
+
+    v1.12 반영: 후보를 Tier1(provenance에 seed)로 제한 — prose가 만든 auto 노드가 조용히
+    좌표가 되는 것을 차단(P2, FABLE F5-①). auto 후보만 있으면 orphan_anchor에 id를 실어
+    사람 판단 재료로 남긴다. 다중 후보는 exact 우선, 극성만 다른 후보들이면 orphan(F1 —
+    어느 극성인지는 사람 판단).
+    """
     if _empty(value):
         return None
     target_cat = spec.get("target_category")
-    cands = [ctx.node(cid) for cid in ctx.dic.lookup(value)]
-    cands = [n for n in cands if n and (target_cat is None or n["category"] == target_cat)]
-    if len(cands) == 1:
-        return cands[0]["id"]
-    if len(cands) > 1:
-        # 골격은 보통 유일. 표면형 완전일치를 우선 선택, 없으면 첫째(결정적).
-        exact = [n for n in cands if n["canonical"] == value]
-        return (exact[0] if exact else cands[0])["id"]
-    ctx.enqueue("orphan_anchor",
-                {"field": field, "surface": value, "target_category": target_cat},
-                reason="anchor 미스 — 골격에 없음(auto 생성 금지, orphan)")
-    return None
+    found = [ctx.node(cid) for cid in ctx.dic.lookup(value)]
+    found = [n for n in found if n and (target_cat is None or n["category"] == target_cat)]
+    cands = [n for n in found if "seed" in (n.get("provenance") or [])]   # Tier1만
+    if not cands:
+        payload = {"field": field, "surface": value, "target_category": target_cat}
+        if found:
+            payload["auto_candidates"] = [n["id"] for n in found]
+            reason = "anchor 후보가 auto 노드뿐 — Tier1 아님(골격 승인 대기, F5)"
+        else:
+            reason = "anchor 미스 — 골격에 없음(auto 생성 금지, orphan)"
+        ctx.enqueue("orphan_anchor", payload, reason=reason)
+        return None
+    exact = [n for n in cands if n["canonical"] == value]
+    if exact:
+        return exact[0]["id"]
+    if len(cands) > 1 and len({n.get("electrode_type") for n in cands}) > 1:
+        # 극성 제거 표면형("탭용접")이 양 극성 골격을 가리킴 — 어느 쪽인지는 사람 판단(v1.12)
+        ctx.enqueue("orphan_anchor",
+                    {"field": field, "surface": value, "target_category": target_cat,
+                     "candidates": [n["id"] for n in cands]},
+                    reason="극성 모호 — 극성 제거 표면형이 양 극성 골격 후보를 가리킴")
+        return None
+    return cands[0]["id"]
 
 
 def handle_entity(field, value, spec, ctx):
-    """개체 — 사전조회→후보검색→판정 3분기(매칭/신규/불확실). 극성 결합 canonical(config.polarity)."""
+    """개체 — 사전조회→후보검색→판정 3분기(매칭/신규/불확실). 극성 결합 canonical(config.polarity).
+
+    v1.12 반영:
+    - 닫힌 카테고리 검증(F13): category가 대상 층 config.categories 밖이면 생성 보류 + invalid_category 큐.
+    - 극성 이중 접두 방어(F11): 표면형이 이미 극성 토큰으로 시작하면 재결합하지 않는다.
+    - canonical scope(F4): 대상 층 config.canonical_scope에 category가 선언되면
+      canonical = "{부착부모 canonical}{sep}{극성 표면형}". 부모 = attach_to_field 해소 노드,
+      미지정/미해소면 @process_ref 폴백(규칙B 좌표, §15.7). 부모 미해소면 무접두(비스코프).
+    """
     if _empty(value):
         return None
+    if isinstance(value, (list, dict)):
+        return None  # 파서 자기완결 계약(§12-3) 위반 — _validate_record가 큐 적재, 여기선 드롭
     category = spec["category"]
     surface = str(value).strip()
-    polarity = _polarity_for(ctx, category)                 # cathode/anode or None (config 구동)
-    canonical = f"{polarity} {surface}" if polarity else surface
     target_layer = spec.get("target_layer") or ctx.schema.get("layer") or ctx.doc.get("layer")
+    target_cfg = ctx.layers_cfg.get(target_layer, {})
+
+    # F13: 닫힌 카테고리 목록 검증(대상 층 기준) — 목록 밖 발명의 코드 안전망(§7-1)
+    if category not in target_cfg.get("categories", {}):
+        ctx.enqueue("invalid_category",
+                    {"field": field, "surface": surface, "category": category,
+                     "target_layer": target_layer, "chunk_id": ctx.chunk_id()},
+                    reason="닫힌 카테고리 목록 밖 — 노드 생성 보류(§7-1 구조적 차단)")
+        return None
+
     graph = ctx.graphs[target_layer]
     prov = ctx.prov()
+
+    # 극성 결합 — 게이팅은 문서 자신의 층 config polarity(§5.2 ③, v1.12 승인 — F2).
+    # F11: 표면형이 이미 극성 토큰으로 시작하면 재결합 금지(파서가 담아 준 극성 존중).
+    pol_values = (ctx.config.get("polarity") or {}).get("values", [])
+    pre_pol = next((v for v in pol_values if surface.startswith(v + " ")), None)
+    polarity = None if pre_pol else _polarity_for(ctx, category)
+    polar_surface = f"{polarity} {surface}" if polarity else surface
+    electrode = pre_pol or polarity
+
+    # F4: canonical scope(부모 접두) — 대상 층 config 구동(개수·이름·유무 무가정, §3.6)
+    canonical = polar_surface
+    scope = target_cfg.get("canonical_scope") or {}
+    if category in scope.get("bind_categories", []):
+        attach_field = spec.get("attach_to_field")
+        parent_id = ctx.resolved.get(attach_field) if attach_field else None
+        if parent_id is None:
+            parent_id = ctx.resolved.get("process_ref")   # 규칙B 폴백 좌표(§15.7)
+        parent = ctx.node(parent_id) if parent_id else None
+        if parent is not None:
+            canonical = f"{parent['canonical']}{scope.get('separator', '::')}{polar_surface}"
 
     # 후보 = 사전 조회(canonical) 필터(category + target_layer)
     cands = []
@@ -123,16 +178,16 @@ def handle_entity(field, value, spec, ctx):
 
     if result["type"] == "match":
         nid = result["matched_id"]
-        _register(ctx, graph, nid, canonical, surface, polarity, prov)  # alias 누적
+        _register(ctx, graph, nid, canonical, polar_surface, surface, prov)  # alias 누적
         return nid
 
     # 신규(auto) 또는 불확실 → 되돌리기 쉬운 쪽: 둘 다 신규 생성 + 큐(명세 §7-5)
     extra = {}
-    if polarity:
-        extra["electrode_type"] = polarity
+    if electrode:
+        extra["electrode_type"] = electrode
     nid = graph.add_node(canonical, category, layer=target_layer,
                          status="auto", provenance=prov, **extra)
-    _register(ctx, graph, nid, canonical, surface, polarity, prov)
+    _register(ctx, graph, nid, canonical, polar_surface, surface, prov)
     if result["type"] == "uncertain":
         ctx.enqueue("uncertain_match",
                     {"surface": canonical, "node": nid, "candidates": [c["id"] for c in cands]},
@@ -144,13 +199,11 @@ def handle_entity(field, value, spec, ctx):
     return nid
 
 
-def _register(ctx, graph, nid, canonical, surface, polarity, prov):
-    """사전·노드 alias 등재. 극성 결합 시 표면형(극성 제거)도 alias 공유(명세 §5.2)."""
-    ctx.dic.register(canonical, nid, prov)
-    graph.add_alias(nid, canonical, prov)
-    if polarity and surface != canonical:
-        ctx.dic.register(surface, nid, prov)
-        graph.add_alias(nid, surface, prov)
+def _register(ctx, graph, nid, canonical, polar_surface, surface, prov):
+    """사전·노드 alias 등재. 표면형(극성·부모 접두 제거)도 alias 공유(명세 §5.2, v1.12 F4)."""
+    for s in dict.fromkeys([canonical, polar_surface, surface]):   # 순서 유지·중복 제거
+        ctx.dic.register(s, nid, prov)
+        graph.add_alias(nid, s, prov)
 
 
 def handle_attribute(field, value, spec, ctx):
@@ -263,7 +316,12 @@ PASS2_ROLES = ("attribute", "content", "meta")  # 부착
 
 
 def _polarity_for(ctx, category):
-    """config.polarity로 이 record가 극성 결합 대상인지 판정. config 없으면 항상 None(유무 무가정)."""
+    """config.polarity로 이 record가 극성 결합 대상인지 판정. config 없으면 항상 None(유무 무가정).
+
+    게이팅 주체 = 문서 자신의 층 config(§5.2 ③, v1.12 승인) — 걸침 필드(target_layer 상이)는
+    문서 층에 polarity 선언이 없으면 극성 결합하지 않는다(예: PFMEA cathode 행의 control_item은
+    비극성 → CP 무극성 Property와 매칭, 규칙B 보강 성립).
+    """
     pol = ctx.config.get("polarity")
     if not pol:
         return None
@@ -284,11 +342,15 @@ def ingest_doc(doc, schema, ctx):
     graph = ctx.graphs[layer]
 
     # Pass1: 전 record의 anchor/entity 해소 → 버퍼
+    # ctx.resolved를 해소 진행 중인 dict로 노출 — canonical scope(F4)의 부모 조회가
+    # 같은 record에서 먼저 해소된 anchor(@process_ref)·entity를 보게 한다.
+    # (블록 필드가 fields 앞에 오므로 좌표 anchor가 항상 선행 — build.load_schema)
     resolved_all = []
     for rec in records:
         ctx.record = rec
         _validate_record(rec, fields, ctx)
         resolved = {}
+        ctx.resolved = resolved
         for f, spec in fields.items():
             if spec["role"] in PASS1_ROLES:
                 resolved[f] = HANDLERS[spec["role"]](f, rec.get(f), spec, ctx)
@@ -341,12 +403,28 @@ def ingest_prose(doc, ctx):
 
 
 def _validate_record(rec, fields, ctx):
-    """인입 검증(§6.5) — 스키마에 없는 필드 → unknown_field. 봉투 구조 필드는 제외."""
+    """인입 검증(§6.5) — 양방향. 어긋남은 조용한 오염 대신 큐에 시끄럽게(v1.12 F6·F15).
+
+    ① 레코드에 스키마에 없는 필드 → unknown_field (봉투 구조 필드는 제외).
+    ② 스키마에 있는 비optional 필드가 부재/빈 값 → missing_field.
+    ③ entity 필드에 리스트/구조 값 → missing_field(파서 자기완결 계약 §12-3 위반 — 전개 필요).
+    """
     known = set(fields) | STRUCTURAL_FIELDS
     for k in rec:
         if k not in known:
             ctx.enqueue("unknown_field", {"field": k, "chunk_id": rec.get("chunk_id")},
                         reason="스키마에 없는 필드 — 파서-스키마 어긋남 신호")
+    for f, spec in fields.items():
+        v = rec.get(f)
+        if spec["role"] == "entity" and isinstance(v, (list, dict)):
+            ctx.enqueue("missing_field",
+                        {"field": f, "chunk_id": rec.get("chunk_id"),
+                         "value_type": type(v).__name__},
+                        reason="entity 필드에 리스트/구조 값 — 파서 자기완결 계약(§12-3) 위반, "
+                               "파서가 개별 레코드로 전개해야 함(핸들러는 단일 값만 봄)")
+        elif not spec.get("optional") and _empty(v):
+            ctx.enqueue("missing_field", {"field": f, "chunk_id": rec.get("chunk_id")},
+                        reason="비optional 필드 부재/빈 값 — §6.5 optional 검사")
 
 
 def _make_edges(edges, resolved, ctx, default_graph):
@@ -396,12 +474,20 @@ def apply_mirrors(graph, config, queue, doc_id, parsed_at=""):
     # 만들지 않게(명세 §5.3은 "자식(part_of/has_property) 수·구성" 비교). 관계명은 config에서.
     sibling_rel = config.get("skeleton", {}).get("relations", {}).get("sibling")
     skip_rels = {relation} | ({sibling_rel} if sibling_rel else set())
+    # canonical scope(F4) 접두가 있으면 구획별로 극성 접두를 벗긴다 —
+    # "노칭::cathode 노칭 정밀도" → "노칭::노칭 정밀도" (구획 구분자는 config 값, §3.6)
+    scope_sep = (config.get("canonical_scope") or {}).get("separator")
 
     def strip(canon):
-        for v in values:
-            if canon.startswith(v + " "):
-                return canon[len(v) + 1:]
-        return canon
+        parts = canon.split(scope_sep) if scope_sep else [canon]
+        out = []
+        for p in parts:
+            for v in values:
+                if p.startswith(v + " "):
+                    p = p[len(v) + 1:]
+                    break
+            out.append(p)
+        return (scope_sep or "").join(out)
 
     # self-heal ①: 이 층의 기존 mirror_asymmetry 항목 전부 제거 → 현재 상태로 재작성
     queue.remove(lambda i: i["kind"] == "mirror_asymmetry" and i.get("payload", {}).get("layer") == layer)
@@ -419,13 +505,19 @@ def apply_mirrors(graph, config, queue, doc_id, parsed_at=""):
         anod = by_pol.get(b_val, [])
         if not cath or not anod:
             continue
+        cath_sig = set().union(*(_incident_sig(graph, x, set(anod), strip, skip_rels) for x in cath))
+        anod_sig = set().union(*(_incident_sig(graph, y, set(cath), strip, skip_rels) for y in anod))
+        # 조건 ④(같은 부모/같은 precedes 위치, §5.3 — v1.12 F3): 양측 시그니처에 공유 문맥
+        # (극성 제거 기준 같은 이웃 — 같은 부모 부착이 여기 포함)이 하나도 없으면 쌍이 아니다.
+        # 다른 공정 아래 동명 극성 노드(예: 실링/cathode 히터 vs 패키징/anode 히터)의 오연결 차단.
+        if not (cath_sig & anod_sig):
+            log.info("mirrors 쌍 보류(공유 문맥 없음 — §5.3 ④ 같은 부모/위치 불충족): %s/%s", cat, base)
+            continue
         # mirror 엣지 생성(중복 엣지는 add_edge가 provenance 병합만) — 재평가라 idempotent
         for x in cath:
             for y in anod:
                 graph.add_edge(x, relation, y, status="auto", provenance=["auto:mirror_rule"])
         # self-heal ②: 극성별 자식 시그니처 합집합 비교(짝 측 노드·형제관계 제외) → 대칭이면 항목 없음
-        cath_sig = set().union(*(_incident_sig(graph, x, set(anod), strip, skip_rels) for x in cath))
-        anod_sig = set().union(*(_incident_sig(graph, y, set(cath), strip, skip_rels) for y in anod))
         only_a, only_b = cath_sig - anod_sig, anod_sig - cath_sig
         if only_a or only_b:
             queue.add("mirror_asymmetry",

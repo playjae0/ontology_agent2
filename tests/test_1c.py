@@ -40,9 +40,9 @@ def test_1c():
         # --- Unit·Property 생성 ---
         u_both = _find(g, "노칭 프레스", "Unit")
         assert u_both and u_both["status"] == "auto", "노칭 프레스(both) Unit auto 생성"
-        p_prec = _find(g, "노칭 정밀도", "Property")
+        p_prec = _find(g, "노칭::노칭 정밀도", "Property")   # v1.12 F4: 부모(좌표) 접두
         assert p_prec, "노칭 정밀도 Property 생성"
-        assert _find(g, "스태커", "Unit") and _find(g, "적층 정렬도", "Property")
+        assert _find(g, "스태커", "Unit") and _find(g, "스태킹::적층 정렬도", "Property")
         assert _find(g, "초음파 융착기", "Unit") and _find(g, "실러", "Unit")
 
         # --- has_property + part_of (설비 part_of 공정, 설비 has_property 관리항목) ---
@@ -55,7 +55,7 @@ def test_1c():
         assert len(conflicts) == 1, f"spec_conflict 1건 기대(C4), 실제 {len(conflicts)}: {conflicts}"
 
         # --- C7 병렬 (context 상이 M2) : 적층 정렬도 spec에 M1·M2 두 항목 ---
-        align = _find(g, "적층 정렬도", "Property")
+        align = _find(g, "스태킹::적층 정렬도", "Property")
         specs = align["attrs"]["spec"]
         ctxs = sorted(json.dumps(x["context"], ensure_ascii=False, sort_keys=True) for x in specs)
         assert len(specs) == 2, f"적층 정렬도 spec 2항목(M1·M2) 기대, 실제 {specs}"
@@ -69,8 +69,8 @@ def test_1c():
         assert u_cat["id"] != u_both["id"] != u_an["id"], "무극성/cathode/anode 별도 노드"
 
         # 극성 Property도 갈림 + 표면형 alias 공유
-        pc = _find(g, "cathode 노칭 정밀도", "Property")
-        pa = _find(g, "anode 노칭 정밀도", "Property")
+        pc = _find(g, "노칭::cathode 노칭 정밀도", "Property")
+        pa = _find(g, "노칭::anode 노칭 정밀도", "Property")
         assert pc and pa
         assert any(a["surface"] == "노칭 프레스" for a in u_cat["aliases"]), "표면형 alias 공유(§5.2)"
 
@@ -84,8 +84,8 @@ def test_1c():
         # --- mirror_asymmetry : anode에만 '버 높이' → 비대칭 큐 ---
         asym = s.queue.by_kind("mirror_asymmetry")
         assert len(asym) >= 1, "mirror_asymmetry 큐(anode 버 높이 추가)"
-        assert _find(g, "anode 버 높이", "Property"), "anode 버 높이 Property"
-        assert _has_edge(g, u_an["id"], "has_property", _find(g, "anode 버 높이", "Property")["id"])
+        assert _find(g, "노칭::anode 버 높이", "Property"), "anode 버 높이 Property"
+        assert _has_edge(g, u_an["id"], "has_property", _find(g, "노칭::anode 버 높이", "Property")["id"])
 
         # --- content(대응계획) describes ---
         assert "CP01-C1-대응계획" in s.chunks.chunks, "필드별 별도 청크 id(§3.4)"

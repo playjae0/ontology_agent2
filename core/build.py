@@ -81,6 +81,13 @@ def plant_skeletons(project_root, data_root):
 # ----------------------------------------------------------------------
 def build_doc(doc, project_root, data_root):
     """파서 출력 doc(계약 #1)을 인입해 data/ 갱신."""
+    # 계약 #1 검증 — 미지원 payload_kind는 조용한 0건 인입 대신 명시적 실패(§3.6, v1.12 F15)
+    payload_kind = doc.get("payload_kind")
+    if payload_kind not in ("table", "prose"):
+        raise ValueError(
+            f"payload_kind '{payload_kind}' 미지원 — 계약 #1 위반(table|prose). "
+            f"조용히 넘기지 않는다(§3.6 명시적 실패)")
+
     s = Stores(project_root, data_root)
     schema = load_schema(Path(project_root) / "schemas", doc["doc_type"])
     layer = schema.get("layer") or doc.get("layer")

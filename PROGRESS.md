@@ -53,6 +53,32 @@
 - **(나) 재인입 노드 중복+stale 큐**: KNOWN_ISSUES.md 기록, 단위 5(재인입 회수 규칙 정밀화)에서 구현. 단위 1a~3 산출물엔 영향 없음(문서 1회 인입).
 - core self-heal 수정은 층 어휘 없음(config 구동) — config-only 성질 유지(quality 격리해도 process 파이프라인 정상).
 
+## FABLE 반영 라운드 (2026-07-12, 명세 v1.12 마감 지시)
+
+- **⚠️ docs/ 동기화 필요**: 지시문은 "명세 v1.12 마감(docs/ 교체본 참조)"이나 레포 docs/는 여전히
+  v1.11(교체본 미반영). **지시문의 결정 내용을 정본으로 구현**했고, 문서에 반영돼야 할 문면:
+  §5.2에 게이팅 주체 ③(문서 층 config polarity)·Property canonical 스코프 규칙("부착부모::표면형",
+  폴백 @process_ref)·극성 이중 접두 금지, §5.3 ④의 구현 의미(공유 문맥), 구현문서 §2.2 예시
+  canonical·§2.3 큐 kind 목록(missing_field·invalid_category)·§2.4 게이팅 주석 위치·§6.2 C6 서술.
+- **즉시 수정분(명세 무변경)**: F1 골격 극성 표면형 alias(skeleton.plant — "탭용접" 질의·anchor 정상화,
+  극성 모호 anchor는 orphan+후보 id) / F6+F15 인입 검증 역방향(missing_field kind 신설, entity 리스트 큐,
+  payload_kind 미지원 raise §3.6) / F13 닫힌 카테고리 검증(invalid_category kind, 생성 보류) /
+  F5-① anchor Tier1(seed) 한정(auto 후보는 orphan+payload) / F12 링킹 단어 경계(왼쪽 글자연속·오른쪽
+  라틴연속 차단 — **오른쪽 한글은 조사라 허용**: 문면 그대로면 "노칭에서"가 깨져 기존 판정 하향이 되므로 조정).
+- **v1.12 마감분**: F4 Property canonical 부모 접두 — config `canonical_scope`(bind_categories/separator)
+  구동, 부모=attach_to_field 해소 노드→@process_ref 폴백, 표면형 alias 등재. R12↔C1 표기변형 매칭·
+  C2/R1 규칙B 보강은 좌표 접두가 같아 유지, 교차 좌표 동명 인자(실링::온도 vs 패키징::온도)는 분리 /
+  F2 현 게이팅(문서 층 config)이 §5.2 ③으로 승인 — 코드 무변경, 주석만 / F11 이중 접두 방어
+  (표면형이 극성 토큰으로 시작하면 재결합 금지, electrode_type은 표면형 우선) / F3 mirrors ④ —
+  극성별 자식 시그니처의 **공유 문맥 존재**를 쌍 성립 조건으로(없으면 mirrors·asymmetry 보류),
+  strip을 스코프 구획별 극성 제거로 일반화 / F16 준비 — core/embeddings.py 생성(embed() 계약,
+  MOCK=sha256 32차원 정규화+경고, 실물=sentence-transformers 지연 import. 후보검색 확장은 이연).
+- **이연 유지(착수 안 함)**: (나)재인입·F7~F10·F14·F16 후보검색 본체 — KNOWN_ISSUES (바) 표 참조.
+- **테스트**: tests/test_fable.py 신설(10건). 기존 테스트는 v1.12 canonical 스코프만 기대값 갱신
+  (test_1c·1d·3 — 판정 하향 없음). **9개 파일 전부 통과**, CLI 스모크(탭용접 질의 graph_fact·
+  레이저노칭 미링킹·규격 3극성 렌더) 확인. core 층 어휘 0 재grep 통과 — core 수정은 §3.6 "core 패턴
+  추가"에 해당(전부 config 구동·층 어휘 없음).
+
 ## 검수 라운드 2 (REVIEW_단위3.md) + 조치
 - 감사(읽기): 구조·범용성(core 층 어휘 0, quality 코드 0)·그래프 무결성(극성·병합·맥락형 attr·provenance §0-5) 견고. 질의 12문항 expected_path 일치.
 - **조치 3건 (테스트 추가·통과, 8개 테스트 전부 OK)**:

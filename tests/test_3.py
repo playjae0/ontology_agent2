@@ -87,19 +87,21 @@ def test_3():
         assert "비고" in uf, "R12 비고 unknown_field"
 
         # --- 규칙A: 걸침 control_item이 process 층 Property auto 생성 ---
-        tabal = _find(p, "타발 속도", "Property")
+        tabal = _find(p, "노칭::타발 속도", "Property")   # v1.12 F4: 좌표 접두
         assert tabal and tabal["status"] == "auto" and tabal["layer"] == "process", "규칙A auto Property"
 
         # --- 규칙B: auto Property가 공정좌표에 has_property로 부착(카테고리쌍 매핑) ---
         assert _has_edge(p, nochi["id"], "has_property", tabal["id"]), "규칙B 공정 부착(노칭 has_property 타발 속도)"
         # 금형 클리어런스: CP(설비 부착) + PFMEA 규칙B(공정 부착) 공존 = C2 보강
-        gm = _find(p, "금형 클리어런스", "Property")
+        gm = _find(p, "노칭::금형 클리어런스", "Property")
         press = _find(p, "노칭 프레스", "Unit")
         assert _has_edge(p, press["id"], "has_property", gm["id"]), "C2: 노칭프레스 has_property 금형클리어런스"
         assert _has_edge(p, nochi["id"], "has_property", gm["id"]), "규칙B: 노칭 has_property 금형클리어런스"
 
         # --- R12 노칭정밀도 → CP '노칭 정밀도'와 매칭(표기 변형, alias) : 신규 노드 아님 ---
-        assert sum(1 for n in p.nodes.values() if n["canonical"] == "노칭 정밀도") == 1
+        # v1.12 F4: 양쪽 다 좌표(노칭) 접두라 정규화 키가 같아 매칭 유지 — 스코프 노드 1개뿐
+        assert sum(1 for n in p.nodes.values() if n["canonical"] == "노칭::노칭 정밀도") == 1
+        assert sum(1 for n in p.nodes.values() if n["canonical"] == "노칭::노칭정밀도") == 0
 
         # --- effect↔severity 정렬로 spec_conflict는 C4(CP)에서만 (severity 병합, 충돌 없음) ---
         conflicts = s.queue.by_kind("spec_conflict")

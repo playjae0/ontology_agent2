@@ -103,4 +103,10 @@ def _ensure_node(graph, canonical, category, dictionary, seen, pol_values):
                          electrode_type=electrode_type)
     if dictionary is not None:
         dictionary.register(canonical, nid, ["seed"])
+        # 극성 제거 표면형은 alias 공유(명세 §5.2, v1.12 F1) — entity 경로 _register와 대칭.
+        # "탭용접"이 질의 링킹·anchor 조회에서 양 극성 골격을 후보로 갖게 한다(선택은 호출자 몫).
+        if electrode_type:
+            stripped = canonical[len(electrode_type) + 1:]
+            dictionary.register(stripped, nid, ["seed"])
+            graph.add_alias(nid, stripped, ["seed"])
     return nid

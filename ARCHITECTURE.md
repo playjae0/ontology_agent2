@@ -25,7 +25,7 @@
 ### 1.3 채널 선택·링킹·임베딩 (부속 관측)
 - **채널 선택**: [`cli/query.classify`](cli/query.py#L34)의 키워드 휴리스틱이 §5.6.4 "답변 LLM이 채널 고름"을 대체. 실물 답변 LLM 도입 시 이 판단이 LLM으로 흡수될 수 있음(classify는 사전 필터로 잔존 가능).
 - **링킹 2단**(사전 미스 시 LLM 언급 추출, §5.6.1): [`core/query.link`](core/query.py#L26)는 사전 스캔(1단)만. 2단 [미배선].
-- **임베딩**: 파일트리 §1의 `core/embeddings.py` **부재**. 판정 후보 검색은 `dictionary.lookup`(정규화 완전/포함, [ingest.py handle_entity](core/ingest.py))이며 임베딩 유사도 아님. 실물 의미 기반 후보검색·Q6 하이브리드 서치는 임베딩 도입 필요(별개 작업, 명세 §5.6.6 사다리).
+- **임베딩**: `core/embeddings.py` **생성됨**(v1.12 반영 라운드 — embed() 계약: MOCK=sha256 정규화 32차원+경고, 실물=sentence-transformers 지연 import). 단 **후보검색 확장은 미배선** — 판정 후보는 여전히 `dictionary.lookup`(정규화 완전 일치, [ingest.py handle_entity](core/ingest.py))뿐이라 embed()를 소비하는 코드가 없음(FABLE_REVIEW F16 본체, LLM 배선 시점). Q6 하이브리드 서치는 별개 이연(명세 §5.6.6 사다리).
 
 ### 1.4 결론 — "함수만 채우면?"
 - **추출**: ✅ 순수 함수 채우기(구조 변경 0).

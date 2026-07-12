@@ -12,10 +12,12 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# 수정 큐 표준 kind (구현문서 §2.3) — 시스템 어휘(층 무관)
+# 수정 큐 표준 kind (구현문서 §2.3 + v1.12: missing_field·invalid_category) — 시스템 어휘(층 무관)
 QUEUE_KINDS = {
     "auto_node", "uncertain_match", "orphan_anchor", "orphan_chunk_link",
     "unknown_field", "spec_conflict", "evidence_lost", "mirror_asymmetry",
+    "missing_field",      # 비optional 필드 부재/빈 값·미전개 리스트(§6.5 역방향, F6·F15)
+    "invalid_category",   # 닫힌 카테고리 목록 밖(§7-1 구조적 차단, F13)
 }
 
 

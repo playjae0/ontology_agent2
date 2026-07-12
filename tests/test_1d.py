@@ -61,7 +61,7 @@ def test_1d():
         # CP에서 이미 만든 노드에 매칭 — PPT가 새로 만들지 않음(주액기 외 신규 Unit 없음 확인)
 
         # --- P3: 적층 정렬도(기존)에 describes ---
-        align = _find(g, "적층 정렬도", "Property")
+        align = _find(g, "스태킹::적층 정렬도", "Property")   # v1.12 F4: 좌표 접두
         assert align["id"] in chunks.nodes_for_chunk("PPT01-P3"), "P3 describes 적층정렬도"
 
         # --- P2: 스침 언급(스태커) 비추출 → describes 없음 ---

@@ -14,6 +14,8 @@
   },
   "mirrors": {"enabled": true, "relation": "mirrors"},
   "polarity": {"field": "electrode_type", "values": ["cathode", "anode"], "bind_categories": ["Unit", "Property"]},
+  "canonical_scope": {"bind_categories": ["Property"], "separator": "::",
+    "_note": "v1.12 F4 — 이 카테고리의 canonical은 '부착부모 canonical::표면형'으로 유일화(부모=attach_to_field, 폴백 @process_ref). 교차 설비 동명 인자 오병합 방지"},
   "relations": ["part_of", "precedes", "has_property", "mirrors"],
   "category_pair_map": {
     "Unit,Process": "part_of",
