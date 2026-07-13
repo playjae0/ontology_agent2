@@ -53,13 +53,38 @@
 - **(나) 재인입 노드 중복+stale 큐**: KNOWN_ISSUES.md 기록, 단위 5(재인입 회수 규칙 정밀화)에서 구현. 단위 1a~3 산출물엔 영향 없음(문서 1회 인입).
 - core self-heal 수정은 층 어휘 없음(config 구동) — config-only 성질 유지(quality 격리해도 process 파이프라인 정상).
 
+## 실행 진입점 + 시각화 (2026-07-13)
+
+- **run.py** — 파이프라인 단일 진입점(표준 라이브러리만): `init [--fresh]` · `build [파일…]`(기본 mock 전량)
+  · `query "<질문>"` [-v] · `test`(tests/test_*.py 전량) · `status`(층·카테고리·관계·큐·청크·사전 요약표)
+  · `all`(= init --fresh → build → test, **깨끗한 재현**). 명령별 exit code, USE_MOCK 기본 1.
+  기존 CLI(§0-7 계약)를 대체하지 않고 감싼다 — 플랫폼은 여전히 `cli.build`/`cli.query`를 subprocess 호출.
+    - **`--fresh`가 필요한 이유(이번에 실측)**: `init_data_tree`는 기존 파일을 덮어쓰지 않으므로(재실행 안전),
+      data/가 남은 채 `all`을 다시 돌리면 build가 **재인입 경로**를 타 노드가 61→147로 불어난다
+      (KNOWN_ISSUES (나) 그 자체가 사용자 눈앞에 발현). `all`은 fresh init으로 고정하고,
+      **"all 두 번 = 같은 그래프"를 회귀 테스트로 못박음**(test_viz.test_run_py_all_is_reproducible).
+- **viz.py** — 시각화(표준 라이브러리만, 파생물 전용·읽기 전용 P5): `html [--open] [--threshold N]`
+  (vis.js CDN 단일 HTML) · `cypher`(out/ontology.cypher) · `neo4j`(cypher 생성 + bolt 적재, 드라이버·서버
+  없으면 친절 안내 + html 경로 제안 — 실측: 드라이버는 있고 서버 인증 실패 시 안내 경로 정상 동작).
+    - **뷰 규칙**: 카테고리 색·관계 선 스타일·극성 모양·mirrors 관계명을 **config·데이터에서 발견 순서대로**
+      배정(§0-1 하드코딩 금지 — 층 어휘 0). cross-layer 엣지 강조(굵은 적색), mirrors는 무방향 파선,
+      극성은 노드 모양(▲cathode/▼anode/●무극성), confirmed는 굵은 테두리.
+      노드 클릭 → 속성 패널(canonical/id/층/카테고리/status/극성/aliases/provenance/attrs/엣지/근거 청크).
+    - **규모 대비**: 노드 > 임계(기본 300)면 기본 ego 뷰(선택 노드+1홉), 전체는 토글 — 기존 platform M8
+      교훈(1000노드 force 멈춤). `--threshold 30`으로 ego 동작 확인.
+    - **판정**: HTML·cypher의 노드/엣지 수 == graph.json 집계(파생물 무결성), 툼스톤만 제외
+      (test_viz). 생성 HTML의 인라인 JS는 `node --check` 문법 통과.
+- **테스트 10/10 통과**(test_viz 신설 — 4케이스). out/은 gitignore(파생물).
+
 ## FABLE 반영 라운드 (2026-07-12, 명세 v1.12 마감 지시)
 
-- **⚠️ docs/ 동기화 필요**: 지시문은 "명세 v1.12 마감(docs/ 교체본 참조)"이나 레포 docs/는 여전히
-  v1.11(교체본 미반영). **지시문의 결정 내용을 정본으로 구현**했고, 문서에 반영돼야 할 문면:
-  §5.2에 게이팅 주체 ③(문서 층 config polarity)·Property canonical 스코프 규칙("부착부모::표면형",
-  폴백 @process_ref)·극성 이중 접두 금지, §5.3 ④의 구현 의미(공유 문맥), 구현문서 §2.2 예시
-  canonical·§2.3 큐 kind 목록(missing_field·invalid_category)·§2.4 게이팅 주석 위치·§6.2 C6 서술.
+- **✅ docs/ 동기화 완료(2026-07-13)**: 지시 시점엔 docs/ 교체본이 레포에 없어 지시문을 정본으로 구현했고,
+  이번에 **명세 v1.12 / 정의서 v1.8 / 구현문서 v1.11**로 문면을 반영(전문 재작성 없이 해당 절 수정 — 문서 자체 규칙).
+  반영 지점: 명세 §5.2(canonical 스코프·게이팅 ③·이중 접두 금지·골격 극성 alias)·§5.3(mirrors ④ 공유 문맥)
+  ·§5.6.1(링킹 단어 경계)·§5.6.6((a) 판정용 임베딩은 이연 아님)·§6.5(missing_field·payload_kind raise)
+  ·§7-1(invalid_category)·§11(뷰어 계약·규모 대비) / 정의서 §3.1(anchor Tier1·극성 모호)·§3.2(스코프·리스트 계약)
+  / 구현문서 §1(파일트리 — store·embeddings·run·viz·out)·§2.2(canonical 예시)·§2.3(큐 kind 2종)·§4(config
+  polarity·canonical_scope)·§6.2(C6 v1.12 정정)·§9.1(실행 진입점).
 - **즉시 수정분(명세 무변경)**: F1 골격 극성 표면형 alias(skeleton.plant — "탭용접" 질의·anchor 정상화,
   극성 모호 anchor는 orphan+후보 id) / F6+F15 인입 검증 역방향(missing_field kind 신설, entity 리스트 큐,
   payload_kind 미지원 raise §3.6) / F13 닫힌 카테고리 검증(invalid_category kind, 생성 보류) /

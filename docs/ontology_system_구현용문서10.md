@@ -1,5 +1,6 @@
-# Ontology System 구현용 문서 v1.10 (Claude Code 입력물)
+# Ontology System 구현용 문서 v1.11 (Claude Code 입력물)
 
+> v1.11: 명세 v1.12 / 정의서 v1.8 동기화 — ①Property canonical 스코프(config `canonical_scope`, 부모 접두 "노칭::노칭 정밀도") ②극성 게이팅 ③(문서 층 config) ③극성 이중 접두 금지 ④골격 극성 노드 표면형 alias ⑤mirrors 조건 ④(공유 문맥) ⑥큐 kind 2종 추가(`missing_field`·`invalid_category`) ⑦링킹 단어 경계 ⑧`core/embeddings.py`(판정용 — 이연 아님, 후보검색 배선만 이연) ⑨실행 진입점 `run.py`·`viz.py` 신설. §1 파일트리·§2.2·§2.3·§3·§4·§6.2·§8·§9 갱신.
 > v1.10: 명세 v1.11 동기화 — mirrors self-heal(매 build 재평가·쌍 키 dedup·해소 시 큐 제거), 재인입 회수 3분류(사전 보존은 단위5), 단위5 판정에 재인입 테스트.
 > v1.9: role 표기 통일(필드 role 5종 + edges 선언, edges는 핸들러 없이 루프 후처리) — 명세 v1.10·정의서 v1.7 정합.
 > v1.8: §9 실행 준비 신설(Claude Code 자율 실행용) — 환경(Python·패키지·init), 착수 단위 세분(1a~1d/2~5), 자동 검증(완료판정→테스트), 막힘 프로토콜(BLOCKERS.md, 추측 금지), 진행 로그(PROGRESS.md).
@@ -37,8 +38,9 @@ ontology/
 │   ├── dictionary.py     전 층 공유 사전: register/lookup(→후보 id 목록)
 │   ├── matcher.py        개체 판정: match(surface, candidates, category)
 │   ├── llm.py            게이트웨이 호출 + JSON 파싱 (USE_MOCK 분기)
-│   ├── embeddings.py     embed(text) — 노드 판정용, 비저장 (USE_MOCK=해시)
-│   ├── ingest.py         role 핸들러 루프 + 검증 + mirrors 자동 규칙
+│   ├── embeddings.py     embed(text) — **판정용** 노드 임베딩, 비저장(USE_MOCK=sha256 해시). 명세 §5.6.6(a) — 이연 아님. 후보검색 top-k 소비는 LLM 배선 시점
+│   ├── store.py          ChunkStore·ReviewQueue (층 공유 인프라 — 청크 원문·수정 큐)
+│   ├── ingest.py         role 핸들러 루프 + 검증(양방향) + mirrors 자동 규칙 + 재인입
 │   ├── build.py          범용 쓰기: config+스키마 로드→재인입→2-pass→mirrors→저장
 │   ├── query.py          범용 읽기: 링킹→확장(config.traverse)→수집→답변(config.templates)
 │   └── skeleton.py       범용 골격 심기: config.skeleton(type=tree|flat + data) 해석
@@ -56,7 +58,10 @@ ontology/
 ├── cli/
 │   ├── build.py          <parsed.json> [--layer] → data/ 갱신
 │   ├── query.py          "<질문>" → 답변 stdout — **단일 진입점 라우터(§8-R1)**: 전역 링킹 → layer별로 층 query 로직 호출 → cross-layer 브리지 1홉 → 두 채널 합성
-│   └── export.py         --cypher | --mermaid
+│   └── export.py         --cypher | --mermaid   (v1.11: viz.py로 일원화 — 파생물 생성은 viz 소관)
+├── run.py                **실행 진입점(v1.11)**: init | build [파일…] | query "<질문>" | test | status | all
+├── viz.py                **시각화(v1.11)**: html(vis.js 단일파일) | cypher | neo4j — 파생물 전용·읽기 전용(P5)
+├── out/                  파생물 산출(gitignore): ontology.html, ontology.cypher
 └── data/
     ├── process/graph.json, quality/graph.json     (진실)
     ├── dictionary.json                             (동의어 사전 — 전 층 공유 단일, §8-R2)
@@ -95,7 +100,7 @@ ontology/
                "status": "confirmed", "electrode_type": "cathode",
                "aliases": [ {"surface": "노칭 프레스", "provenance": ["CP01-C8"]} ],
                "provenance": ["CP01-C8"] },
-    "N0031": { "id": "N0031", "canonical": "cathode 노칭 프레스::노칭 정밀도", "category": "Property", "layer": "process",
+    "N0031": { "id": "N0031", "canonical": "노칭::cathode 노칭 정밀도", "category": "Property", "layer": "process",
                "attrs": { "spec": [ {"context": {"model": "M1"}, "value": {"min":-0.1,"center":0,"max":0.1,"unit":"mm"}, "provenance": ["CP01-C8"]} ] },
                "status": "auto", "provenance": ["CP01-C8"] } },
   "edges": [ { "src": "N0002", "rel": "precedes", "dst": "N0003",
@@ -105,7 +110,10 @@ ontology/
 }
 ```
 - id는 발급 후 불변. cross-layer 엣지는 품질층 graph.json에 저장(src=품질층 노드, dst=공정층 노드 id — 생성 방향 규약 §8-4).
-- **극성 노드**: canonical에 극성 결합("cathode 노칭 프레스"), 표면형("노칭 프레스")은 alias 공유(§5.2). Property의 극성별 노드는 canonical 부모 접두로 유일화.
+- **극성 노드**: canonical에 극성 결합("cathode 노칭 프레스"), 표면형("노칭 프레스")은 alias 공유(§5.2). 파서 표면형이 이미 극성을 담고 있으면 재결합 금지(이중 접두 방지, v1.12).
+- **canonical 스코프 (v1.12)**: config `canonical_scope.bind_categories`에 선언된 카테고리(공정층=Property)는 canonical을 **`{부착 부모}::{표면형}`**으로 유일화한다. 부모 = 그 필드의 `attach_to_field`가 가리키는 해소 노드, **없거나 미해소면 행의 `@process_ref`로 폴백**(규칙B와 같은 좌표).
+  - 현 스키마 기준 실제 값: cp.json의 `관리항목`은 attach_to_field가 없으므로(엣지는 `edges` 선언이 담당) **좌표 폴백 → `노칭::노칭 정밀도`**. PFMEA의 걸침 control_item도 좌표 폴백 → `노칭::타발 속도`. 즉 현재는 대부분 **공정 좌표 스코프**이며, 스키마가 Property에 `attach_to_field: "설비"`를 선언하면 그때 `노칭 프레스::노칭 정밀도`(설비 스코프)가 된다 — **스키마 한 줄, 코드 0**(L1).
+  - 표면형("노칭 정밀도")은 alias로 등재 — 질의 링킹은 그대로. 근거·대가는 명세 §5.2.
 - **맥락형 attribute**(spec 등): `attrs`에 스칼라가 아니라 `[{context, value}]` 리스트로 저장(정의서 §3.3). context 미지정분은 봉투 context 상속.
 - **mirrors 엣지**: 자동 규칙(§5.3) 산출물, provenance=auto:mirror_rule.
 
@@ -117,9 +125,10 @@ ontology/
   "describes": [ {"chunk_id": "PPT01-C001", "node_id": "N0011"} ] }
 ```
 ```json
-[ { "kind": "auto_node|uncertain_match|orphan_anchor|orphan_chunk_link|unknown_field|spec_conflict|evidence_lost|mirror_asymmetry",
+[ { "kind": "auto_node|uncertain_match|orphan_anchor|orphan_chunk_link|unknown_field|spec_conflict|evidence_lost|mirror_asymmetry|missing_field|invalid_category",
     "payload": {"...": "..."}, "reason": "...", "doc_id": "...", "created": "..." } ]
 ```
+- **v1.11 추가 kind 2종**: `missing_field` — 비optional 필드 부재/빈 값, 또는 entity 필드의 미전개 리스트(파서 자기완결 계약 위반, 명세 §6.5·§12-3). `invalid_category` — 닫힌 카테고리 목록 밖 category(노드 생성 보류, 명세 §7-1).
 - 엣지 status 값: `confirmed` | `auto` | `deleted_by_user`(사람 삭제 툼스톤 — graph.json 영속, add_edge가 건너뜀, 명세 §5.5-3). provenance-0 엣지는 evidence_lost 큐(노드와 대칭). enforcement는 엣지 삭제 도구 시점(단계 5)에 구현, 계약은 지금 준수.
 
 ### 2.4 doc_type 스키마 — schemas/pfmea.json (전문)
@@ -192,7 +201,9 @@ ontology/
   "skeleton": {"type": "tree", "category": "Process",
                "data": {"조립": ["노칭","스태킹","탭용접","패키징","전해액주입","실링"]},
                "relations": {"child": "part_of", "sibling": "precedes"}},
-  "mirrors": {"enabled": true},
+  "mirrors": {"enabled": true, "relation": "mirrors"},
+  "polarity": {"field": "electrode_type", "values": ["cathode", "anode"], "bind_categories": ["Unit", "Property"]},
+  "canonical_scope": {"bind_categories": ["Property"], "separator": "::"},
   "relations": ["part_of", "precedes", "has_property", "mirrors"],
   "category_pair_map": { "Unit,Process": "part_of", "Process,Property": "has_property", "Unit,Property": "has_property" },
   "match_threshold": 0.85,
@@ -213,6 +224,7 @@ ontology/
 }
 ```
 - part_of의 src=자식, dst=부모 (Unit part_of Process). precedes는 query_traverse에 없음(의도 — 명세 §5.6.2, 순서 정보는 그래프 사실 채널 담당).
+- **`polarity`·`mirrors.relation`·`canonical_scope`는 값(B)이다** — core에 극성 값("cathode")·관계명("mirrors")·카테고리명("Property")을 박지 않기 위한 하강(§0-1·§3.6). 극성 축이 없는 층은 `polarity`를 안 쓰고, 스코프가 필요 없는 층은 `canonical_scope`를 안 쓴다(유무 무가정). 품질층 config에는 **셋 다 없다** — 그래서 Failure는 극성 결합도 부모 접두도 되지 않는다(명세 §5.2 게이팅 ③·스코프 선언).
 
 ### layers/quality/config.json
 ```json
@@ -292,7 +304,7 @@ ontology/
 | C3 | 스태킹 | 스태커 | 적층 정렬도 | ±0.2mm | R5와 매칭 |
 | C4 | 스태킹 | 스태커 | 적층 정렬도 | **±0.3mm** | **spec 충돌**: C3와 다른 값 → spec_conflict 큐, 덮어쓰지 않음 |
 | C5 | 탭용접 | 초음파 융착기 | 용접 가압력 | 0.3MPa | R7과 매칭 |
-| C6 | 실링 | 실러 | 실링 온도 | 180±5℃ | R9의 auto Property와 매칭 |
+| C6 | 실링 | 실러 | 실링 온도 | 180±5℃ | **v1.12 정정**: R9(패키징 행)의 auto Property와는 **매칭되지 않는다** — canonical 스코프가 좌표별로 갈리므로 `실링::실링 온도`(C6) vs `패키징::실링 온도`(R9). R9의 좌표 어긋남(실링 온도를 패키징 행이 지목)이 데이터로 드러난 것이며, 병합이 옳다면 수정 도구(node merge)의 몫 — 오병합보다 되돌리기 쉬운 쪽(§9) |
 | C7 | 스태킹 | 스태커 | 적층 정렬도 | ±0.25mm (record context: {model:"M2"}) | **맥락형 검증**: 봉투 M1을 record가 M2로 덮어씀 → C3(M1)과 context가 다르므로 **충돌 아님**, 병렬 항목 추가 |
 | C8 | 노칭 | 노칭 프레스 (electrode_type: cathode) | 노칭 정밀도 | ±0.1mm | **극성 결합 canonical**: "cathode 노칭 프레스" 노드 생성 |
 | C9 | 노칭 | 노칭 프레스 (electrode_type: anode) | 노칭 정밀도 | ±0.12mm | C8과 **mirrors 자동 연결** 검증(극성 제거 canonical 동일+극성 반대+같은 부모). C9에만 관리항목 "버 높이" 1건 추가 → **mirror_asymmetry 큐** 검증 |
@@ -358,6 +370,7 @@ ontology/
 - **가상환경**: `python3 -m venv .venv && source .venv/bin/activate`. requirements는 실물 전환 시에만 설치.
 - **디렉토리 초기화**: 첫 실행 시 data/ 하위(process/·quality/·dictionary.json·id_seq.json·chunks.json·review_queue.json)를 빈 상태로 생성하는 `init` 동작. 각 파일 초기값: graph.json={"nodes":{},"edges":[]}, dictionary.json={}, id_seq.json={"next":1}, chunks.json={"chunks":{},"describes":[]}, review_queue.json=[].
 - **패키지 구조**: core/·layers/·cli/에 `__init__.py`. import는 절대경로(`from core.graph import ...`), 실행은 프로젝트 루트에서 `python -m cli.build ...`.
+- **실행 진입점 (v1.11)**: 일상 실행은 `run.py`가 감싼다 — `python run.py all`(init→build→test, 깨끗한 재현) / `status`(층·카테고리·관계·큐·사전 요약표) / `query "<질문>"` / `test`(tests/test_*.py 전량). 시각화는 `python viz.py html --open`(단일 HTML, vis.js) · `cypher` · `neo4j`. 둘 다 **표준 라이브러리만**(외부 패키지 0, §9.1) 쓰며 기존 CLI 계약(§0-7)을 대체하지 않고 감싼다 — 플랫폼은 여전히 `cli.build`/`cli.query`를 subprocess로 호출하면 된다.
 - **로깅**: logging 표준 모듈, 레벨 INFO. MOCK 경고·큐 적재·명시적 실패(§3.6)는 명확히 로그.
 
 ### 9.2 착수 단위 (§7 5단계를 자율 실행 가능한 크기로 세분)

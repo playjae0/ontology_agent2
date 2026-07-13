@@ -16,3 +16,6 @@ venv/
 
 # Generated runtime data (진실 그래프는 build로 재생성 — P5)
 data/
+
+# 시각화 파생물 (viz.py로 재생성 — P5)
+out/
