@@ -110,6 +110,10 @@ def build_doc(doc, project_root, data_root):
     for lyr, cfg in s.layers_cfg.items():
         ingest.apply_mirrors(s.graphs[lyr], cfg, s.queue, doc["doc_id"], doc.get("parsed_at", ""))
 
+    # evidence_lost 재평가 — 재인입·ingest·mirrors 이후 provenance 최종 상태로 self-heal(§5.5-3 ③).
+    # 재인입이 근거를 복원하면(재매칭) 소멸 표시가 사라진다 — reinject 중 표시하면 stale로 남음.
+    ingest.sweep_evidence_lost(s.graphs, s.queue, doc["doc_id"], doc.get("parsed_at", ""))
+
     s.save()
     log.info("build_doc 완료: doc=%s layer=%s", doc["doc_id"], layer)
     return s

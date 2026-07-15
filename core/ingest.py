@@ -200,7 +200,17 @@ def handle_entity(field, value, spec, ctx):
 
 
 def _register(ctx, graph, nid, canonical, polar_surface, surface, prov):
-    """사전·노드 alias 등재. 표면형(극성·부모 접두 제거)도 alias 공유(명세 §5.2, v1.12 F4)."""
+    """사전·노드 alias 등재 + 노드 provenance 누적. 표면형(극성·부모 접두 제거)도 alias 공유(§5.2 F4).
+
+    노드 provenance 누적(v1.13): 매칭이든 신규든 이 문서를 노드의 근거로 기록한다 — "provenance가
+    여럿인 노드는 다른 문서가 여전히 근거"(§5.5-3)의 실제 구현. 이게 없으면 매칭 경로가 노드 근거를
+    안 남겨, 재인입이 provenance를 걷은 뒤 재매칭돼도 노드는 근거 0으로 보여 evidence_lost 오탐.
+    """
+    node = graph.nodes.get(nid)
+    if node is not None:
+        for p in prov:
+            if p not in node["provenance"]:
+                node["provenance"].append(p)
     for s in dict.fromkeys([canonical, polar_surface, surface]):   # 순서 유지·중복 제거
         ctx.dic.register(s, nid, prov)
         graph.add_alias(nid, s, prov)
@@ -544,14 +554,21 @@ def _incident_sig(graph, nid, exclude, strip, skip_rels):
 
 
 # ======================================================================
-# 재인입 (명세 §5.5-3) — doc_id 단위 provenance 회수
+# 재인입 (명세 §5.5-3) — doc_id 단위 회수/보존/재평가 3분류
 # ======================================================================
 def reinject(doc_id, graphs, dic, chunks, queue, parsed_at=""):
-    """개정 문서 재인입 전 해당 doc_id의 발자국 회수.
+    """개정 문서 재인입 전 해당 doc_id의 발자국 회수 (명세 §5.5-3 3분류, v1.13 노드 유일성 불변식).
 
-    노드/엣지/alias/attribute 값 항목의 provenance에서 doc_id 소속 항목 제거.
-    노드·엣지 자체는 삭제하지 않음(다른 문서가 근거일 수 있음). provenance-0이 된 auto
-    산출물은 evidence_lost 큐(자동 삭제 금지 — 되돌리기 쉬운 쪽). 청크·describes는 회수.
+    ① 회수(제거): 그 문서에서 온 청크·describes·엣지 provenance·attribute 항목·노드 provenance.
+    ② 보존(회수 금지): **살아있는 노드의 식별 수단(canonical·alias·사전 엔트리)은 삭제하지 않는다.**
+       노드가 살아 있으면 그 식별 수단도 살아야 재인입 시 재매칭된다 — 사전 엔트리를 걷으면 사전 미스로
+       **중복 노드가 생성**된다(단위 1c 검수 실측: cathode 노칭 프레스 2개, mirror 데카르트곱 폭증).
+       provenance만 걷고 엔트리·alias 자체는 유지. 노드·엣지 삭제는 수정 도구(사람)만(자동 삭제 금지).
+    ③ 재평가: 이 doc_id의 기존 큐 항목을 회수(queue.remove_doc) → 재인입 결과로 재작성. evidence_lost는
+       build 말미 sweep_evidence_lost가 provenance 최종 상태로 self-heal(재인입 중 표시하면 동일 문서
+       재매칭 시 stale로 남으므로 — provenance 복원 후에 판정), mirror_asymmetry는 apply_mirrors self-heal.
+
+    첫 인입(그 doc_id가 처음)이면 belongs가 아무것도 안 걸어 전부 no-op(안전).
     """
     def belongs(p):
         return p == doc_id or (isinstance(p, str) and p.startswith(doc_id + "-"))
@@ -559,57 +576,58 @@ def reinject(doc_id, graphs, dic, chunks, queue, parsed_at=""):
     def filt(prov):
         return [p for p in prov if not belongs(p)]
 
-    for g in graphs.values():
-        # 노드 provenance + alias + attribute 항목
-        for nid, n in n_items(g):
-            before = len(n["provenance"])
-            n["provenance"] = filt(n["provenance"])
-            n["aliases"] = _filt_aliases(n["aliases"], belongs)
-            _filt_attrs(n["attrs"], belongs)
-            if n["status"] == "auto" and before and not n["provenance"]:
-                queue.add("evidence_lost", {"node": nid, "canonical": n["canonical"]},
-                          doc_id, "근거 소멸 — provenance 0(자동 삭제 금지)", parsed_at)
-        # 엣지 provenance
-        kept = []
-        for e in g.edges:
-            if e.get("status") == "deleted_by_user":
-                kept.append(e)
-                continue
-            had = len(e["provenance"])
-            e["provenance"] = filt(e["provenance"])
-            if had and not e["provenance"]:
-                queue.add("evidence_lost", {"edge": [e["src"], e["rel"], e["dst"]]},
-                          doc_id, "엣지 근거 소멸 — provenance 0", parsed_at)
-                # 자동 삭제 금지 — 엣지도 남기되 근거 0 표시(큐로 표면화)
-            kept.append(e)
-        g.edges = kept
+    # ③ — 이 문서가 남긴 큐 항목 회수(재인입 결과로 재작성). evidence_lost·mirror_asymmetry는
+    #    각각 sweep_evidence_lost·apply_mirrors가 전역 self-heal하므로 여기서 지워도 재작성됨.
+    queue.remove_doc(doc_id)
 
-    # 사전 provenance 회수 (빈 항목 제거)
+    live_ids = set()
+    for g in graphs.values():
+        for nid, n in g.nodes.items():
+            live_ids.add(nid)
+            # ① provenance만 회수. ② 노드·alias 자체는 보존(살아있는 노드의 식별 수단).
+            n["provenance"] = filt(n["provenance"])
+            for a in n["aliases"]:
+                a["provenance"] = filt(a["provenance"])   # alias 자체는 유지(②)
+            _filt_attrs(n["attrs"], belongs)
+        # 엣지: provenance만 회수, 엣지 자체는 보존(자동 삭제 금지 — 툼스톤은 손대지 않음)
+        for e in g.edges:
+            if e.get("status") != "deleted_by_user":
+                e["provenance"] = filt(e["provenance"])
+
+    # ② 사전 보존 — 엔트리는 노드가 살아 있으면 유지(재매칭 수단). provenance만 걷되, 엔트리는
+    #    가리키는 노드가 **실제 삭제됐을 때만** 제거(현 reinject는 노드를 안 지우므로 사실상 전부 유지).
     for key in list(dic.entries):
         bucket = []
         for item in dic.entries[key]:
             item["provenance"] = filt(item["provenance"])
-            if item["provenance"]:
-                bucket.append(item)
+            if item["id"] in live_ids or item["provenance"]:
+                bucket.append(item)                        # 살아있는 노드의 엔트리 = 보존(중복 방지 핵심)
         if bucket:
             dic.entries[key] = bucket
         else:
-            del dic.entries[key]
+            del dic.entries[key]                            # 가리킬 노드가 없는 엔트리만 소거
 
     chunks.remove_doc(doc_id)
 
 
-def n_items(graph):
-    return list(graph.nodes.items())
+def sweep_evidence_lost(graphs, queue, doc_id, parsed_at=""):
+    """provenance-0 auto 산출물을 evidence_lost로 표시 — self-heal 재평가(매 build, §5.5-3 ③).
 
-
-def _filt_aliases(aliases, belongs):
-    out = []
-    for a in aliases:
-        a["provenance"] = [p for p in a["provenance"] if not belongs(p)]
-        if a["provenance"]:
-            out.append(a)
-    return out
+    mirror_asymmetry와 같은 패턴: 기존 evidence_lost 전부 제거 후 현재 provenance 상태로 재작성.
+    재인입으로 근거가 복원되면(재매칭) 항목이 사라지고, 진짜 소멸이면 1건만 유지 → stale 없음.
+    build 말미(재인입·ingest·mirrors 이후)에 호출해야 provenance 최종 상태를 본다.
+    (doc_id는 이 재평가를 유발한 build의 것 — mirror_asymmetry와 동일, payload로 대상 추적.)
+    """
+    queue.remove(lambda i: i["kind"] == "evidence_lost")
+    for layer, g in graphs.items():
+        for nid, n in g.nodes.items():
+            if n.get("status") == "auto" and not n["provenance"]:
+                queue.add("evidence_lost", {"node": nid, "canonical": n["canonical"]},
+                          doc_id, "근거 소멸 — provenance 0(자동 삭제 금지)", parsed_at)
+        for e in g.edges:
+            if e.get("status") != "deleted_by_user" and not e["provenance"]:
+                queue.add("evidence_lost", {"edge": [e["src"], e["rel"], e["dst"]]},
+                          doc_id, "엣지 근거 소멸 — provenance 0", parsed_at)
 
 
 def _filt_attrs(attrs, belongs):

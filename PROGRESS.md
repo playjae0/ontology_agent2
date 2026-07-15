@@ -53,6 +53,32 @@
 - **(나) 재인입 노드 중복+stale 큐**: KNOWN_ISSUES.md 기록, 단위 5(재인입 회수 규칙 정밀화)에서 구현. 단위 1a~3 산출물엔 영향 없음(문서 1회 인입).
 - core self-heal 수정은 층 어휘 없음(config 구동) — config-only 성질 유지(quality 격리해도 process 파이프라인 정상).
 
+## 단위 3.5 — 재인입 회수 ②(사전 보존) + 노드 유일성 불변식(P4) (2026-07-15)
+
+- **docs v1.13/v1.12 정본 반영**: 사용자가 명세 v1.13·구현문서 v1.12 교체본 투입(파일명 " (14)/(7)" →
+  정본명으로 정리, git 트리 M으로 정돈). v1.13 P4 = **노드 유일성 불변식**("같은 개념=언제나 한 노드,
+  중복 생성 금지"), §5.5-3 ②를 "단위5 이연"에서 **플랫폼 전(단위 3.5)**으로 전진. **내 구현이 이 정본과 일치**.
+- **구현(명세 §5.5-3 3분류)** — `core/ingest.reinject` 정밀화:
+    - **② 보존**: provenance만 doc_id로 걷고 **살아있는 노드의 사전 엔트리·alias·노드·엣지 자체는 삭제 금지**
+      (node id가 그래프에 있으면 유지 — `item["id"] in live_ids`). 재인입 시 사전 재조회로 재매칭(중복 0).
+    - **③ 재평가**: `queue.remove_doc(doc_id)`로 그 문서 큐 항목 회수 → 재인입 결과로 재작성.
+      evidence_lost는 build 말미 `sweep_evidence_lost`(신설)가 provenance **최종** 상태로 self-heal
+      (재인입 중 판정하면 같은 문서 재매칭 시 stale로 남음 — mirror_asymmetry와 같은 매-build 재평가 패턴).
+    - **부수(match provenance 누적)**: `_register`가 매칭 경로에서도 노드 provenance를 누적 —
+      없으면 재인입이 provenance를 걷은 뒤 재매칭돼도 노드가 근거 0으로 보여 evidence_lost 오탐(§5.5-3
+      "provenance가 여럿인 노드는 다른 문서가 여전히 근거"의 실제 구현. 다중근거 노드 실증: 노칭::노칭 정밀도
+      = CP01-C1 + PFMEA01-R12 양쪽).
+- **실측 전/후**(viz html 노드/엣지 카운트 + status):
+    - CP01 단독 재인입: 노드 26 → **26**(이전 26→27 중복), cathode 노칭 프레스 **1개**(이전 2개).
+    - 3문서 반복(--fresh 없이): 61 → **61**(이전 **61→147**), 엣지 97 → **97**, mirrors 3 유지(데카르트곱 없음).
+    - 큐: 첫 빌드 55건 → 재인입 후 **6건**(auto_node는 재매칭이라 재적재 안 됨 — 정상), evidence_lost **0**(오탐 없음).
+    - 재인입 **고정점**: 라운드2 == 라운드3(노드/엣지/큐 완전 일치). status 표에서 중복 노드·가짜 mirror 없음 확인.
+- **테스트 파일 10→11개**: `tests/test_reinject.py` 신설(유일성·고정점·큐 비폭증·다중근거 생존·개정
+  evidence_lost 5케이스), `test_viz.test_build_without_fresh_is_safe` 추가(--fresh 없이 재빌드 안전),
+  `test_run_py_all_is_reproducible`에 큐 수 일치 추가. **전체 11/11 파일 통과**.
+- **KNOWN_ISSUES (나) → ✅ 해소**. 남은 경계: 대칭↔비대칭 **역방향** 복원은 노드 삭제 도구(단위5) 필요
+  (재인입은 노드를 안 지우고 evidence_lost로 남김 — 자동 삭제 금지, 재인입 결함 아님).
+
 ## 실행 진입점 + 시각화 (2026-07-13)
 
 - **run.py** — 파이프라인 단일 진입점(표준 라이브러리만): `init [--fresh]` · `build [파일…]`(기본 mock 전량)

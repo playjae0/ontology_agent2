@@ -54,9 +54,10 @@ def test_mirror_selfheal():
         assert _n_asym(s) == 0, f"대칭 회복 후 asymmetry 0 기대, 실제 {_n_asym(s)}: {s.queue.by_kind('mirror_asymmetry')}"
 
         # [경계] 원본으로 되돌려 다시 비대칭이 되는 검증은 여기 두지 않는다:
-        # 재인입이 살아있는 노드(대칭화로 추가된 cathode '버 높이')를 삭제하지 않고 evidence_lost로
-        # 남기므로(KNOWN_ISSUES (나)), union 비교상 여전히 대칭으로 보인다. self-heal의 정방향
-        # (비대칭→대칭 감지)은 여기서 확증됐고, 역방향 복원은 (나) 재인입 회수 정밀화(단위5) 후 성립.
+        # (나) 재인입 중복은 단위 3.5에서 해소(사전 보존 → 노드 중복 0, test_reinject)됐으나, 역방향 복원은
+        # 여전히 미성립 — 대칭화로 추가된 cathode '버 높이' 노드/엣지가 재인입 후 evidence_lost로 **살아남으므로**
+        # (자동 삭제 금지, 되돌리기 쉬운 쪽), union 비교상 구조가 여전히 대칭이다. 정방향(비대칭→대칭 감지)은
+        # 여기서 확증됐고, 역방향 복원은 노드 삭제 도구(단위5)가 있어야 성립 — 재인입 결함이 아니라 삭제 미구현.
 
     print("test_mirror_selfheal OK")
 

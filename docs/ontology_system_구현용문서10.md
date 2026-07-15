@@ -1,6 +1,7 @@
-# Ontology System 구현용 문서 v1.11 (Claude Code 입력물)
+# Ontology System 구현용 문서 v1.12 (Claude Code 입력물)
 
-> v1.11: 명세 v1.12 / 정의서 v1.8 동기화 — ①Property canonical 스코프(config `canonical_scope`, 부모 접두 "노칭::노칭 정밀도") ②극성 게이팅 ③(문서 층 config) ③극성 이중 접두 금지 ④골격 극성 노드 표면형 alias ⑤mirrors 조건 ④(공유 문맥) ⑥큐 kind 2종 추가(`missing_field`·`invalid_category`) ⑦링킹 단어 경계 ⑧`core/embeddings.py`(판정용 — 이연 아님, 후보검색 배선만 이연) ⑨실행 진입점 `run.py`·`viz.py` 신설. §1 파일트리·§2.2·§2.3·§3·§4·§6.2·§8·§9 갱신.
+> v1.12: 명세 v1.13 동기화 — 노드 유일성 불변식(P4), 재인입 ②를 단위 3.5로 전진(플랫폼 전, 중복 노드 제거).
+> v1.11: 명세 v1.12 동기화(Fable 검수) — Property canonical 부모 접두, 게이팅 ③(문서 층 polarity 선언), 극성 이중 접두 방어, mirrors 키 부모 포함, embeddings.py 골격 필수(판정 임베딩은 이연 아님).
 > v1.10: 명세 v1.11 동기화 — mirrors self-heal(매 build 재평가·쌍 키 dedup·해소 시 큐 제거), 재인입 회수 3분류(사전 보존은 단위5), 단위5 판정에 재인입 테스트.
 > v1.9: role 표기 통일(필드 role 5종 + edges 선언, edges는 핸들러 없이 루프 후처리) — 명세 v1.10·정의서 v1.7 정합.
 > v1.8: §9 실행 준비 신설(Claude Code 자율 실행용) — 환경(Python·패키지·init), 착수 단위 세분(1a~1d/2~5), 자동 검증(완료판정→테스트), 막힘 프로토콜(BLOCKERS.md, 추측 금지), 진행 로그(PROGRESS.md).
@@ -38,9 +39,8 @@ ontology/
 │   ├── dictionary.py     전 층 공유 사전: register/lookup(→후보 id 목록)
 │   ├── matcher.py        개체 판정: match(surface, candidates, category)
 │   ├── llm.py            게이트웨이 호출 + JSON 파싱 (USE_MOCK 분기)
-│   ├── embeddings.py     embed(text) — **판정용** 노드 임베딩, 비저장(USE_MOCK=sha256 해시). 명세 §5.6.6(a) — 이연 아님. 후보검색 top-k 소비는 LLM 배선 시점
-│   ├── store.py          ChunkStore·ReviewQueue (층 공유 인프라 — 청크 원문·수정 큐)
-│   ├── ingest.py         role 핸들러 루프 + 검증(양방향) + mirrors 자동 규칙 + 재인입
+│   ├── embeddings.py     embed(text) — 노드 판정용, 비저장 (USE_MOCK=해시)
+│   ├── ingest.py         role 핸들러 루프 + 검증 + mirrors 자동 규칙
 │   ├── build.py          범용 쓰기: config+스키마 로드→재인입→2-pass→mirrors→저장
 │   ├── query.py          범용 읽기: 링킹→확장(config.traverse)→수집→답변(config.templates)
 │   └── skeleton.py       범용 골격 심기: config.skeleton(type=tree|flat + data) 해석
@@ -58,10 +58,7 @@ ontology/
 ├── cli/
 │   ├── build.py          <parsed.json> [--layer] → data/ 갱신
 │   ├── query.py          "<질문>" → 답변 stdout — **단일 진입점 라우터(§8-R1)**: 전역 링킹 → layer별로 층 query 로직 호출 → cross-layer 브리지 1홉 → 두 채널 합성
-│   └── export.py         --cypher | --mermaid   (v1.11: viz.py로 일원화 — 파생물 생성은 viz 소관)
-├── run.py                **실행 진입점(v1.11)**: init | build [파일…] | query "<질문>" | test | status | all
-├── viz.py                **시각화(v1.11)**: html(vis.js 단일파일) | cypher | neo4j — 파생물 전용·읽기 전용(P5)
-├── out/                  파생물 산출(gitignore): ontology.html, ontology.cypher
+│   └── export.py         --cypher | --mermaid
 └── data/
     ├── process/graph.json, quality/graph.json     (진실)
     ├── dictionary.json                             (동의어 사전 — 전 층 공유 단일, §8-R2)
@@ -100,7 +97,7 @@ ontology/
                "status": "confirmed", "electrode_type": "cathode",
                "aliases": [ {"surface": "노칭 프레스", "provenance": ["CP01-C8"]} ],
                "provenance": ["CP01-C8"] },
-    "N0031": { "id": "N0031", "canonical": "노칭::cathode 노칭 정밀도", "category": "Property", "layer": "process",
+    "N0031": { "id": "N0031", "canonical": "cathode 노칭 프레스::노칭 정밀도", "category": "Property", "layer": "process",
                "attrs": { "spec": [ {"context": {"model": "M1"}, "value": {"min":-0.1,"center":0,"max":0.1,"unit":"mm"}, "provenance": ["CP01-C8"]} ] },
                "status": "auto", "provenance": ["CP01-C8"] } },
   "edges": [ { "src": "N0002", "rel": "precedes", "dst": "N0003",
@@ -110,10 +107,7 @@ ontology/
 }
 ```
 - id는 발급 후 불변. cross-layer 엣지는 품질층 graph.json에 저장(src=품질층 노드, dst=공정층 노드 id — 생성 방향 규약 §8-4).
-- **극성 노드**: canonical에 극성 결합("cathode 노칭 프레스"), 표면형("노칭 프레스")은 alias 공유(§5.2). 파서 표면형이 이미 극성을 담고 있으면 재결합 금지(이중 접두 방지, v1.12).
-- **canonical 스코프 (v1.12)**: config `canonical_scope.bind_categories`에 선언된 카테고리(공정층=Property)는 canonical을 **`{부착 부모}::{표면형}`**으로 유일화한다. 부모 = 그 필드의 `attach_to_field`가 가리키는 해소 노드, **없거나 미해소면 행의 `@process_ref`로 폴백**(규칙B와 같은 좌표).
-  - 현 스키마 기준 실제 값: cp.json의 `관리항목`은 attach_to_field가 없으므로(엣지는 `edges` 선언이 담당) **좌표 폴백 → `노칭::노칭 정밀도`**. PFMEA의 걸침 control_item도 좌표 폴백 → `노칭::타발 속도`. 즉 현재는 대부분 **공정 좌표 스코프**이며, 스키마가 Property에 `attach_to_field: "설비"`를 선언하면 그때 `노칭 프레스::노칭 정밀도`(설비 스코프)가 된다 — **스키마 한 줄, 코드 0**(L1).
-  - 표면형("노칭 정밀도")은 alias로 등재 — 질의 링킹은 그대로. 근거·대가는 명세 §5.2.
+- **극성 노드**: canonical에 극성 결합("cathode 노칭 프레스"), 표면형("노칭 프레스")은 alias 공유(§5.2). Property의 극성별 노드는 canonical 부모 접두로 유일화.
 - **맥락형 attribute**(spec 등): `attrs`에 스칼라가 아니라 `[{context, value}]` 리스트로 저장(정의서 §3.3). context 미지정분은 봉투 context 상속.
 - **mirrors 엣지**: 자동 규칙(§5.3) 산출물, provenance=auto:mirror_rule.
 
@@ -125,10 +119,9 @@ ontology/
   "describes": [ {"chunk_id": "PPT01-C001", "node_id": "N0011"} ] }
 ```
 ```json
-[ { "kind": "auto_node|uncertain_match|orphan_anchor|orphan_chunk_link|unknown_field|spec_conflict|evidence_lost|mirror_asymmetry|missing_field|invalid_category",
+[ { "kind": "auto_node|uncertain_match|orphan_anchor|orphan_chunk_link|unknown_field|spec_conflict|evidence_lost|mirror_asymmetry",
     "payload": {"...": "..."}, "reason": "...", "doc_id": "...", "created": "..." } ]
 ```
-- **v1.11 추가 kind 2종**: `missing_field` — 비optional 필드 부재/빈 값, 또는 entity 필드의 미전개 리스트(파서 자기완결 계약 위반, 명세 §6.5·§12-3). `invalid_category` — 닫힌 카테고리 목록 밖 category(노드 생성 보류, 명세 §7-1).
 - 엣지 status 값: `confirmed` | `auto` | `deleted_by_user`(사람 삭제 툼스톤 — graph.json 영속, add_edge가 건너뜀, 명세 §5.5-3). provenance-0 엣지는 evidence_lost 큐(노드와 대칭). enforcement는 엣지 삭제 도구 시점(단계 5)에 구현, 계약은 지금 준수.
 
 ### 2.4 doc_type 스키마 — schemas/pfmea.json (전문)
@@ -185,7 +178,7 @@ ontology/
 - **graph.py**: `add_node(canonical, category, layer, status, attrs, provenance) → id` — **id는 전역 유일**(data/id_seq.json 공유 시퀀스, 층 무관) / `add_edge(src, rel, dst, status, provenance)`(중복 무시. **status="deleted_by_user" 툼스톤인 (src,rel,dst)-by-id는 건너뜀** — 재인입 부활 방지, 명세 §5.5-3. enforcement는 단계5) / `neighbors(ids, traverse_spec)` — traverse_spec은 관계별 {direction: "out|in|both", recursive: bool} dict를 **인자로** 받음(내용은 층 코드가 소유 — 현 C, 명세 §5.6.2) / save/load.
 - **dictionary.py**: **전 층 공유 단일 파일**(data/dictionary.json). `lookup(surface) → 후보 노드 id 목록`(층 간 표면형 충돌 허용 — 호출자가 category/layer로 선별). register 시 provenance 필수. canonical과 alias 모두 등재.
 - **matcher.py**: 입력 mention+후보들(canonical, aliases, 부착 위치, category). USE_MOCK=문자열 정규화 포함 규칙(공백 제거 후 동일/포함), 실물=판정 프롬프트(정의문·비대칭 기준은 층 config에서 주입). **카테고리 불일치 안전망**: 추출 category ≠ 최상 후보 category → match 금지.
-- **ingest.py**: 정의서 §6 핸들러 루프(필드 role 5종 핸들러) + edges 후처리(핸들러 아님, 필드 해소 후 엣지 생성) + 검증. 핸들러 공통 시그니처 `handle(value, spec, ctx) → resolved_id|value|None`. ctx = {graph들(layer별), dic, queue, record, schema}. 처리 순서: Pass1 = 전 record의 anchor/entity 해소(버퍼) → Pass2 = attribute/content/edges 적용. entity 3분기: 매칭(alias 누적)/신규(auto 생성+큐 kind=auto_node)/불확실(신규+큐 kind=uncertain_match). anchor 미스 → 후보검색+판정 → 실패 시 큐 kind=orphan_anchor(레코드 전체를 보류하지 않고 해당 엣지만 생략). 재인입: 동일 doc_id 유입 시 해당 provenance 항목 제거 → provenance 0의 auto 노드는 큐 kind=evidence_lost. **context 상속**: record.context가 없으면 봉투 context 사용. **맥락형 attribute**(contextual:true): [{context, value, provenance}] 리스트에 추가(provenance 필수, §0-5), 충돌은 같은 context 그룹 내 deep-equal만. 단순형도 [{value, provenance}]. 재인입 시 attribute 항목도 doc_id로 회수(같은 문서 개정값은 교체, provenance-0은 evidence_lost). **극성 결합 canonical**: category∈{Unit,Property} AND record.electrode_type=cathode/anode일 때만 entity 생성·조회 canonical에 극성 결합(명세 §5.2 v1.7 — Failure 제외, both/무표기는 극성 무관). mirrors 자동 규칙의 전제. **mirrors 자동 규칙**: build 저장 직전 **매번 재평가**(§5.3 self-heal), 같은 부모 아래 (극성 제거 canonical 동일 + electrode_type 반대) 노드 쌍에 mirrors 엣지 생성 + 자식 수·구성 비교 → 불일치 시 mirror_asymmetry 큐. **큐는 (극성제거 canonical, 부모) 쌍 키로 dedup**(재빌드/재인입 중복 없음), 대칭 회복 시 제거. LLM 불요. **엣지 provenance**: 재인입 시 엣지 provenance도 doc_id 단위로 회수, provenance-0 엣지는 evidence_lost 큐(노드 대칭).
+- **ingest.py**: 정의서 §6 핸들러 루프(필드 role 5종 핸들러) + edges 후처리(핸들러 아님, 필드 해소 후 엣지 생성) + 검증. 핸들러 공통 시그니처 `handle(value, spec, ctx) → resolved_id|value|None`. ctx = {graph들(layer별), dic, queue, record, schema}. 처리 순서: Pass1 = 전 record의 anchor/entity 해소(버퍼) → Pass2 = attribute/content/edges 적용. entity 3분기: 매칭(alias 누적 + **노드 provenance 누적** — 다중근거 노드가 근거 0 오탐되지 않게, v1.13)/신규(auto 생성+큐 kind=auto_node)/불확실(신규+큐 kind=uncertain_match). anchor 미스 → 후보검색+판정 → 실패 시 큐 kind=orphan_anchor(레코드 전체를 보류하지 않고 해당 엣지만 생략). **재인입 3분류(§5.5-3, v1.13 단위 3.5)**: ①회수 = 동일 doc_id의 provenance 항목 제거(청크·describes·엣지·attribute·노드) / ②보존 = 살아있는 노드의 **사전 엔트리·alias·노드·엣지 자체는 삭제 금지**(node id가 그래프에 존재하면 유지 → 재인입 재매칭, 중복 0. 노드 유일성 불변식 P4) / ③재평가 = `queue.remove_doc(doc_id)` + evidence_lost는 build 말미 `sweep_evidence_lost`가 provenance 최종 상태로 self-heal(재인입 중 판정하면 재매칭 시 stale). **context 상속**: record.context가 없으면 봉투 context 사용. **맥락형 attribute**(contextual:true): [{context, value, provenance}] 리스트에 추가(provenance 필수, §0-5), 충돌은 같은 context 그룹 내 deep-equal만. 단순형도 [{value, provenance}]. 재인입 시 attribute 항목도 doc_id로 회수(같은 문서 개정값은 교체, provenance-0은 evidence_lost). **극성 결합 canonical**: ①category∈{Unit,Property} AND ②record.electrode_type=cathode/anode AND ③**문서 층 config가 polarity 선언**일 때만(F2). **Property는 부모 접두**: canonical=`{부착부모}::{표면형}`(F4 — §2.2 예시 N0031이 정본). 표면형이 이미 극성으로 시작하면 재결합 금지(이중 접두 방어, F11). 이때만 entity 생성·조회 canonical에 극성 결합(명세 §5.2 v1.7 — Failure 제외, both/무표기는 극성 무관). mirrors 자동 규칙의 전제. **mirrors 자동 규칙**: build 저장 직전 **매번 재평가**(§5.3 self-heal), 같은 부모 아래 (극성 제거 canonical 동일 + electrode_type 반대) 노드 쌍에 mirrors 엣지 생성 + 자식 수·구성 비교 → 불일치 시 mirror_asymmetry 큐. **큐는 (극성제거 canonical, 부모) 쌍 키로 dedup**(재빌드/재인입 중복 없음), 대칭 회복 시 제거. LLM 불요. **엣지 provenance**: 재인입 시 엣지 provenance도 doc_id 단위로 회수, provenance-0 엣지는 evidence_lost 큐(노드 대칭).
 
 ## 4. 층 config (전문)
 
@@ -201,9 +194,7 @@ ontology/
   "skeleton": {"type": "tree", "category": "Process",
                "data": {"조립": ["노칭","스태킹","탭용접","패키징","전해액주입","실링"]},
                "relations": {"child": "part_of", "sibling": "precedes"}},
-  "mirrors": {"enabled": true, "relation": "mirrors"},
-  "polarity": {"field": "electrode_type", "values": ["cathode", "anode"], "bind_categories": ["Unit", "Property"]},
-  "canonical_scope": {"bind_categories": ["Property"], "separator": "::"},
+  "mirrors": {"enabled": true},
   "relations": ["part_of", "precedes", "has_property", "mirrors"],
   "category_pair_map": { "Unit,Process": "part_of", "Process,Property": "has_property", "Unit,Property": "has_property" },
   "match_threshold": 0.85,
@@ -224,7 +215,6 @@ ontology/
 }
 ```
 - part_of의 src=자식, dst=부모 (Unit part_of Process). precedes는 query_traverse에 없음(의도 — 명세 §5.6.2, 순서 정보는 그래프 사실 채널 담당).
-- **`polarity`·`mirrors.relation`·`canonical_scope`는 값(B)이다** — core에 극성 값("cathode")·관계명("mirrors")·카테고리명("Property")을 박지 않기 위한 하강(§0-1·§3.6). 극성 축이 없는 층은 `polarity`를 안 쓰고, 스코프가 필요 없는 층은 `canonical_scope`를 안 쓴다(유무 무가정). 품질층 config에는 **셋 다 없다** — 그래서 Failure는 극성 결합도 부모 접두도 되지 않는다(명세 §5.2 게이팅 ③·스코프 선언).
 
 ### layers/quality/config.json
 ```json
@@ -266,7 +256,7 @@ ontology/
 - **core/skeleton.py (범용)**: config.skeleton을 해석. `type=tree`면 data(중첩 dict)를 부모-자식 part_of + 형제 나열순 precedes로 심음. `type=flat`이면 data(목록)를 지정 category의 노드로만 심음(엣지 없음). 노드는 confirmed·provenance=["seed"]. canonical 층 내 유일 검사. 극성 잔존 공정을 극성별로 심는 것도 skeleton.data가 표현(사내 seed).
   - process config.skeleton = {"type":"tree", "category":"Process", "data":{"조립":["노칭","스태킹","탭용접","패키징","전해액주입","실링"]}, "relations":{"child":"part_of","sibling":"precedes"}}
   - quality config.skeleton = {"type":"flat", "category":"FailureEffect", "data":["단락","화재","방전기능상실","충전기능상실"]}  `# [사내 확정] 교체`
-- **core/build.py (범용)**: config+스키마 로드 → 재인입 처리(청크·describes·노드/엣지/attribute provenance를 doc_id로 회수, provenance-0 → evidence_lost) → ingest.ingest_doc(2-pass) → mirrors 자동 규칙(config.mirrors.enabled일 때) → 저장. prose는 content 경로(추출→describes, 미해소 orphan_chunk_link), table은 핸들러 루프. **층 무관** — 차이는 스키마 edges·config.mirrors뿐.
+- **core/build.py (범용)**: config+스키마 로드 → 재인입 처리(§5.5-3 3분류 — provenance만 doc_id로 회수, 살아있는 노드의 사전·alias·노드·엣지는 보존, `queue.remove_doc`) → ingest.ingest_doc(2-pass) → mirrors 자동 규칙(config.mirrors.enabled일 때, self-heal) → **evidence_lost 재평가(`sweep_evidence_lost` — provenance 최종 상태 기준)** → 저장. prose는 content 경로(추출→describes, 미해소 orphan_chunk_link), table은 핸들러 루프. **층 무관** — 차이는 스키마 edges·config.mirrors뿐.
 - **core/query.py (범용)** + **router.py**: router가 층 폴더 자동 발견, cli/query.py가 단일 진입점(전역 링킹 → layer별 core.query 호출 → cross-layer 브리지 1홉 → 합성, §8-R1). core.query 4단: ①링킹(사전 스캔[긴 표면형 우선] → USE_MOCK=0이면 LLM 폴백; 3단 `# HOOK: hybrid_search`) ②확장(config.query_traverse 스펙으로 core.neighbors — 관계 개수·이름 무가정 순회) ③수집(2-tier 직접>확장, 상한 8, 최신순, 잘림 로그) ④답변(그래프 사실 문장화[config.fact_templates: 엣지+attrs, 맥락형은 context 그룹별 한 줄] + 청크 원문. flow 패턴→골격+precedes 통째. 답변 3단 규칙: 근거 있음→출처 / 없음→"사내 근거 없음"+[일반지식—사내 검증 필요]+등록 개체 안내 / 미스 로그).
 - **명시적 실패 지점**: skeleton.type이 tree/flat이 아니거나, config에 없는 traverse 방향/패턴을 만나면 core가 raise하며 "config 표현 밖 — core 패턴 추가 필요"를 알림(§3.6 탈출구).
 
@@ -304,7 +294,7 @@ ontology/
 | C3 | 스태킹 | 스태커 | 적층 정렬도 | ±0.2mm | R5와 매칭 |
 | C4 | 스태킹 | 스태커 | 적층 정렬도 | **±0.3mm** | **spec 충돌**: C3와 다른 값 → spec_conflict 큐, 덮어쓰지 않음 |
 | C5 | 탭용접 | 초음파 융착기 | 용접 가압력 | 0.3MPa | R7과 매칭 |
-| C6 | 실링 | 실러 | 실링 온도 | 180±5℃ | **v1.12 정정**: R9(패키징 행)의 auto Property와는 **매칭되지 않는다** — canonical 스코프가 좌표별로 갈리므로 `실링::실링 온도`(C6) vs `패키징::실링 온도`(R9). R9의 좌표 어긋남(실링 온도를 패키징 행이 지목)이 데이터로 드러난 것이며, 병합이 옳다면 수정 도구(node merge)의 몫 — 오병합보다 되돌리기 쉬운 쪽(§9) |
+| C6 | 실링 | 실러 | 실링 온도 | 180±5℃ | R9의 auto Property와 매칭 |
 | C7 | 스태킹 | 스태커 | 적층 정렬도 | ±0.25mm (record context: {model:"M2"}) | **맥락형 검증**: 봉투 M1을 record가 M2로 덮어씀 → C3(M1)과 context가 다르므로 **충돌 아님**, 병렬 항목 추가 |
 | C8 | 노칭 | 노칭 프레스 (electrode_type: cathode) | 노칭 정밀도 | ±0.1mm | **극성 결합 canonical**: "cathode 노칭 프레스" 노드 생성 |
 | C9 | 노칭 | 노칭 프레스 (electrode_type: anode) | 노칭 정밀도 | ±0.12mm | C8과 **mirrors 자동 연결** 검증(극성 제거 canonical 동일+극성 반대+같은 부모). C9에만 관리항목 "버 높이" 1건 추가 → **mirror_asymmetry 큐** 검증 |
@@ -349,7 +339,8 @@ ontology/
 | 2 | 질의 4단 + 이원 근거 채널 | queries.json 1~8·11·12가 expected_path대로 응답. flow 질의(5번)가 골격 전체 공급. 링킹 미스 로그 기록 확인 |
 | 3 | 품질지식층 = **config+스키마만 추가**(층 코드 0) + PFMEA01 인입 + cross-layer | **`git diff core/` 가 비어 있음** = **품질층이 config만으로 core 범용 파이프라인에서 도는 것**이 성공 판정(§3.6 config-only 확증). 도중 core 수정이 필요했다면 그 지점이 "config 표현 부족→core 패턴 추가"의 첫 실측(기록 남길 것). "이물 유입→절연 파괴→내부 단락" causes 사슬 존재. R9 orphan_anchor(effect)·R13 orphan_anchor(process_ref, occurs_in+Property 동반 드롭)·R12 unknown_field 큐. 규칙A(auto Property)·규칙B(공정 부착 → C2로 보강) 동작. effect_category↔severity 정렬로 spec_conflict는 C4에서만 발생. add_edge가 deleted_by_user status를 건너뛰는 계약 준수(enforcement는 단계5). cross 질의 응답: 9번=occurs_in 역방향으로 노칭의 Failure들, 10번=affects 역방향 **직접 결과**(수집 노드 간 causes 엣지는 그래프 사실로 문장화 — 2홉 연쇄 전체는 스모크 요구 아님). **Q1~8 회귀**: cross-layer on 상태에서 1~8이 단계2 baseline과 동일 응답(브리지로 딸려온 Failure 청크·노드에 오염 안 됨) — §8-6 채널분리(그래프 사실 관련성 필터 + 청크 tier2 잘림)의 실증 지점 |
 | 4 | 플랫폼 연동 (명세 §16.2 개조 1·2) | 플랫폼이 subprocess로 build/query 호출, 2층+cross-layer 그래프 표시, 수정 큐 열람 |
-| 5 | 수정 도구 + 계기판 최소 + **재인입 회수 ②(사전 보존)** (② 명세 마감 후 착수) | 병합/alias 이관/개명/엣지 삭제(deleted_by_user enforcement) CLI+플랫폼 동작. **재인입 테스트**: CP01 동일 재인입→노드 중복 없음·asymmetry 1 유지, 대칭으로 고쳐 재인입→asymmetry 0(§5.5-3 ②③·§5.3 self-heal). 큐 소화 왕복 |
+| 3.5 | **재인입 회수 ②(사전 보존)** — 노드 유일성 불변식(P4) 이행, 플랫폼 전 | 재인입→노드 수 불변(중복 0)·사전 재매칭으로 provenance 복원·옛 큐 회수(queue.remove_doc). run.py all 2회 = 동일 그래프. |
+| 5 | 수정 도구 + 계기판 최소 (② 명세 마감 후 착수) | 병합/alias 이관/개명/엣지 삭제(deleted_by_user enforcement) CLI+플랫폼 동작. **재인입 테스트**: CP01 동일 재인입→노드 중복 없음·asymmetry 1 유지, 대칭으로 고쳐 재인입→asymmetry 0(§5.5-3 ②③·§5.3 self-heal). 큐 소화 왕복 |
 
 - 각 단계 종료 시 사람 검수(그래프 JSON·큐 눈검사) 후 진행 — 병목은 코드 생성이 아니라 검수 시간.
 - 단계 3에서 품질층 추가가 **core를 한 줄도 안 건드렸는지**를 기록 — config-only 확증(§3.6). core 수정이 있었다면 어느 결정점이 config로 표현 안 됐는지가 3층 대비 관찰 데이터.
@@ -370,7 +361,6 @@ ontology/
 - **가상환경**: `python3 -m venv .venv && source .venv/bin/activate`. requirements는 실물 전환 시에만 설치.
 - **디렉토리 초기화**: 첫 실행 시 data/ 하위(process/·quality/·dictionary.json·id_seq.json·chunks.json·review_queue.json)를 빈 상태로 생성하는 `init` 동작. 각 파일 초기값: graph.json={"nodes":{},"edges":[]}, dictionary.json={}, id_seq.json={"next":1}, chunks.json={"chunks":{},"describes":[]}, review_queue.json=[].
 - **패키지 구조**: core/·layers/·cli/에 `__init__.py`. import는 절대경로(`from core.graph import ...`), 실행은 프로젝트 루트에서 `python -m cli.build ...`.
-- **실행 진입점 (v1.11)**: 일상 실행은 `run.py`가 감싼다 — `python run.py all`(init→build→test, 깨끗한 재현) / `status`(층·카테고리·관계·큐·사전 요약표) / `query "<질문>"` / `test`(tests/test_*.py 전량). 시각화는 `python viz.py html --open`(단일 HTML, vis.js) · `cypher` · `neo4j`. 둘 다 **표준 라이브러리만**(외부 패키지 0, §9.1) 쓰며 기존 CLI 계약(§0-7)을 대체하지 않고 감싼다 — 플랫폼은 여전히 `cli.build`/`cli.query`를 subprocess로 호출하면 된다.
 - **로깅**: logging 표준 모듈, 레벨 INFO. MOCK 경고·큐 적재·명시적 실패(§3.6)는 명확히 로그.
 
 ### 9.2 착수 단위 (§7 5단계를 자율 실행 가능한 크기로 세분)

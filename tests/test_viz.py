@@ -102,13 +102,12 @@ def test_viz_excludes_tombstone():
         assert not any(e.get("status") == "deleted_by_user" for e in edges)
 
 
-def test_run_py_all_is_reproducible():
-    """`all`(=init --fresh → build)이 **깨끗한 재현**인가 — 두 번 돌려도 그래프가 동일.
+def _queue_count(dr):
+    return len(json.loads((Path(dr) / "review_queue.json").read_text(encoding="utf-8")))
 
-    회귀 방지: init이 기존 data/를 보존하면(재실행 안전) 두 번째 build가 재인입 경로를 타
-    노드가 중복 생성된다(KNOWN_ISSUES (나) — 단위5까지 미해결). 그래서 all은 fresh여야 한다.
-    (여기선 test 단계를 뺀 init --fresh + build만 재현 — all을 그대로 부르면 테스트가 재귀한다.)
-    """
+
+def test_run_py_all_is_reproducible():
+    """`all`(=init --fresh → build) 2회 = 동일 그래프(노드/엣지/**큐** 수 완전 일치)."""
     with tempfile.TemporaryDirectory() as tmp:
         env = dict(os.environ, USE_MOCK="1", PYTHONPATH=str(ROOT))
 
@@ -117,11 +116,34 @@ def test_run_py_all_is_reproducible():
                 r = subprocess.run([sys.executable, str(ROOT / "run.py"), "--data", tmp, "-q", *argv],
                                    cwd=ROOT, env=env, capture_output=True, text=True)
                 assert r.returncode == 0, r.stdout + r.stderr
-            return _truth(Path(tmp))
+            return (*_truth(Path(tmp)), _queue_count(tmp))
 
         first = cycle()
         second = cycle()
-        assert first == second, f"all 재현 불가(재인입 중복): 1회차 {first} != 2회차 {second}"
+        assert first == second, f"all 재현 불가: 1회차 {first} != 2회차 {second}"
+
+
+def test_build_without_fresh_is_safe():
+    """단위 3.5 — **--fresh 없이 build 반복해도 안전**(재인입 회수 ② 이후).
+
+    init(한 번) 후 build를 두 라운드 돌린다(--fresh 없음). 2라운드째는 전부 재인입 경로.
+    (나) 해소 전엔 노드가 중복 생성됐다(61→147). 이제 노드/엣지 불변, 큐는 재인입 후 안정.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        env = dict(os.environ, USE_MOCK="1", PYTHONPATH=str(ROOT))
+
+        def build_round():
+            for argv in ["init"], ["build"]:                 # init은 보존(--fresh 아님)
+                r = subprocess.run([sys.executable, str(ROOT / "run.py"), "--data", tmp, "-q", *argv],
+                                   cwd=ROOT, env=env, capture_output=True, text=True)
+                assert r.returncode == 0, r.stdout + r.stderr
+            return (*_truth(Path(tmp)), _queue_count(tmp))
+
+        first = build_round()
+        second = build_round()                                # 재인입 라운드(--fresh 없이)
+        assert first[:2] == second[:2], f"--fresh 없이 재빌드 시 노드/엣지 변동(중복): {first} → {second}"
+        third = build_round()
+        assert second == third, f"재인입 고정점 실패(큐 stale): {second} → {third}"
 
 
 def test_run_py_commands():
@@ -153,5 +175,6 @@ if __name__ == "__main__":
     test_viz_matches_truth()
     test_viz_excludes_tombstone()
     test_run_py_all_is_reproducible()
+    test_build_without_fresh_is_safe()
     test_run_py_commands()
     print("test_viz OK")
