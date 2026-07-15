@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -29,9 +30,12 @@ def _read_json(path, default):
 
 
 def _write_json(path, obj):
+    """원자적 저장(F14): tmp에 쓰고 os.replace로 교체 — 중단 시 유실 방지(graph._write_json과 대칭)."""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, p)
 
 
 class ChunkStore:

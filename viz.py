@@ -102,8 +102,13 @@ def build_view(nodes, edges, chunks, describes, layers_cfg):
     # mirrors 관계명·극성 값 — config에서(코드에 박지 않음)
     mirror_rels = {cfg["mirrors"]["relation"] for cfg in layers_cfg.values()
                    if cfg.get("mirrors", {}).get("enabled") and cfg["mirrors"].get("relation")}
-    polarity_values = sorted({v for cfg in layers_cfg.values()
-                              for v in (cfg.get("polarity") or {}).get("values", [])})
+    # 극성 값은 config 선언 순서 보존(G6) — sorted면 ▲가 anode에 붙어 주석("cathode=삼각")과 반대.
+    # 다른 축(카테고리·관계)과 같은 "발견 순서" 규칙으로 통일. values[0]=cathode → ▲triangle.
+    polarity_values = []
+    for cfg in layers_cfg.values():
+        for v in (cfg.get("polarity") or {}).get("values", []):
+            if v not in polarity_values:
+                polarity_values.append(v)
 
     # 청크 역인덱스(노드 → 청크 원문) — 속성 패널 재료
     by_node = {}

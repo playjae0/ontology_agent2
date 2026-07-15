@@ -1,8 +1,14 @@
 """core/build.py — 범용 쓰기 파이프라인 (구현문서 §3·§5). 층 무관 — config+스키마 구동.
 
 절차: config/스키마 로드 → 재인입(doc_id 발자국 회수) → ingest 2-pass →
-      mirrors 자동 규칙(config.mirrors.enabled) → 저장.
+      mirrors 자동 규칙(config.mirrors.enabled) → evidence_lost·검토 큐 sweep → 저장.
 config로 표현 안 되는 절차를 만나면 명시적 실패(§3.6 탈출구, 오버라이드 코드 금지) — ingest/skeleton가 raise.
+
+**build 직렬 계약 (F14, 명세 §16.1)**: build_doc은 **직렬 실행**을 전제한다. id 발급(전역 시퀀스)과
+저장(graph.json 전체 재기록)이 프로세스 간 원자적이지 않으므로, 같은 data_root에 동시 build를 돌리면
+id 충돌(P4 유일성 위반)·저장 유실이 난다. 플랫폼이 subprocess로 호출할 때 **호출부가 직렬화를 보장**해야
+한다(한 번에 하나의 build). 여기서 보장하는 것은 개별 파일의 **원자적 쓰기**(tmp+os.replace — 쓰다 만
+파일 방지)뿐이며, 프로세스 간 파일 락은 단위 4에서 구현(계약은 지금 확정 — 성능 P7과 별개인 정합성 요구).
 """
 from __future__ import annotations
 
@@ -113,6 +119,10 @@ def build_doc(doc, project_root, data_root):
     # evidence_lost 재평가 — 재인입·ingest·mirrors 이후 provenance 최종 상태로 self-heal(§5.5-3 ③).
     # 재인입이 근거를 복원하면(재매칭) 소멸 표시가 사라진다 — reinject 중 표시하면 stale로 남음.
     ingest.sweep_evidence_lost(s.graphs, s.queue, doc["doc_id"], doc.get("parsed_at", ""))
+
+    # 검토 큐(auto_node/uncertain_match) 재평가 — status=auto 노드 전수로 재작성(G3, §5.5-3).
+    # 큐를 노드 상태의 파생물로: 재인입 match 경로에서도 검토 항목이 증발하지 않는다(§16.1).
+    ingest.sweep_review_nodes(s.graphs, s.queue, doc["doc_id"], doc.get("parsed_at", ""))
 
     s.save()
     log.info("build_doc 완료: doc=%s layer=%s", doc["doc_id"], layer)

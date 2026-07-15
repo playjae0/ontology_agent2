@@ -146,6 +146,19 @@ def test_build_without_fresh_is_safe():
         assert second == third, f"재인입 고정점 실패(큐 stale): {second} → {third}"
 
 
+def test_atomic_save_no_tmp_leftover():
+    """F14 — 원자적 저장(tmp+os.replace): build 후 .tmp 잔존 없고 저장 파일이 유효 JSON."""
+    with tempfile.TemporaryDirectory() as tmp:
+        dr = Path(tmp)
+        build.plant_skeletons(ROOT, dr)
+        for name in ("CP01", "PPT01", "PFMEA01"):
+            doc = json.loads((ROOT / f"mock/parsed/{name}.json").read_text(encoding="utf-8"))
+            build.build_doc(doc, ROOT, dr)
+        assert list(dr.rglob("*.tmp")) == [], "원자적 저장 후 .tmp 파일이 남으면 안 됨"
+        for gp in dr.rglob("*.json"):                          # 전 산출물이 유효 JSON
+            json.loads(gp.read_text(encoding="utf-8"))
+
+
 def test_run_py_commands():
     """run.py init/build/query/status가 exit 0 (표준 라이브러리만·USE_MOCK=1)."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -176,5 +189,6 @@ if __name__ == "__main__":
     test_viz_excludes_tombstone()
     test_run_py_all_is_reproducible()
     test_build_without_fresh_is_safe()
+    test_atomic_save_no_tmp_leftover()
     test_run_py_commands()
     print("test_viz OK")

@@ -11,15 +11,23 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 
 def _write_json(path, obj):
+    """원자적 저장(F14): tmp에 쓰고 os.replace로 교체 — 중단 시 옛 파일 유실 방지.
+
+    os.replace는 같은 파일시스템에서 원자적(POSIX). build 직렬 실행 전제이므로 동시 write 경합은
+    호출부(플랫폼)가 직렬화로 막는다(파일 락은 단위4). 여기서 막는 것은 "쓰다 만 파일"뿐.
+    """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def _read_json(path, default):

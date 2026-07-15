@@ -116,6 +116,59 @@ def test_reinject_preserves_multi_provenance_node():
         assert "노칭::노칭 정밀도" not in el_canons, "다중근거 노드가 근거소멸로 오표시"
 
 
+def test_reinject_auto_node_survives():
+    """G3 — 재인입 후 auto_node 큐가 status=auto 노드 수와 일치(증발 0). build 말미 sweep(§5.5-3)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        dr = Path(tmp)
+        build.plant_skeletons(ROOT, dr)
+        s = build.build_doc(_load("CP01"), ROOT, dr)
+        n_auto = sum(1 for g in s.graphs.values() for n in g.nodes.values() if n["status"] == "auto")
+        assert len(s.queue.by_kind("auto_node")) == n_auto, "첫 빌드부터 auto_node == status=auto 노드 수"
+
+        s = build.build_doc(_load("CP01"), ROOT, dr)            # 재인입(match 경로)
+        n_auto2 = sum(1 for g in s.graphs.values() for n in g.nodes.values() if n["status"] == "auto")
+        assert n_auto2 == n_auto, "재인입 후 auto 노드 수 불변"
+        assert len(s.queue.by_kind("auto_node")) == n_auto2, \
+            f"재인입 후 auto_node 증발: 큐 {len(s.queue.by_kind('auto_node'))} != 노드 {n_auto2}"
+
+
+def test_reinject_uncertain_marker_survives():
+    """G3 — uncertain 판정 노드는 review 표식으로 남아, 재인입(match 경로)에도 uncertain_match 재작성.
+
+    MOCK matcher는 uncertain을 안 내므로 matcher.match를 monkeypatch로 강제한다(코드 경로 검증).
+    """
+    from core import ingest
+    orig = ingest.matcher.match
+    try:
+        # 첫 인입: '노칭 프레스' 첫 등장 1회만 uncertain 강제(같은 표면형이 여러 행에 있으므로 stateful)
+        state = {"fired": False}
+
+        def force_uncertain(surface, cands, category, threshold=0.85):
+            if surface == "노칭 프레스" and not state["fired"]:
+                state["fired"] = True
+                return {"type": "uncertain", "matched_id": None, "confidence": 0.5}
+            return orig(surface, cands, category, threshold)
+        ingest.matcher.match = force_uncertain
+        with tempfile.TemporaryDirectory() as tmp:
+            dr = Path(tmp)
+            build.plant_skeletons(ROOT, dr)
+            s = build.build_doc(_load("CP01"), ROOT, dr)
+            um = s.queue.by_kind("uncertain_match")
+            assert len(um) == 1, f"uncertain_match 1건 기대: {len(um)}"
+            node = next(n for g in s.graphs.values() for n in g.nodes.values()
+                        if n["canonical"] == "노칭 프레스")
+            assert node.get("review", {}).get("uncertain") is True, "노드에 uncertain 표식"
+
+            # 재인입: 이제 정상 판정(노칭 프레스는 기존 노드에 match) — uncertain_match 유지돼야
+            ingest.matcher.match = orig
+            s = build.build_doc(_load("CP01"), ROOT, dr)
+            um2 = s.queue.by_kind("uncertain_match")
+            assert len(um2) == 1, f"재인입 후 uncertain_match 증발: {len(um2)} (review 표식으로 보존돼야)"
+            assert um2[0]["payload"]["node"] == node["id"]
+    finally:
+        ingest.matcher.match = orig
+
+
 def test_reinject_genuine_revision_surfaces_evidence_lost():
     """개정으로 정말 사라진 개체는 노드는 남기되(자동 삭제 금지) evidence_lost로 표면화(§5.5-3 ①)."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -137,5 +190,7 @@ if __name__ == "__main__":
     test_reinject_fixed_point()
     test_reinject_no_queue_explosion()
     test_reinject_preserves_multi_provenance_node()
+    test_reinject_auto_node_survives()
+    test_reinject_uncertain_marker_survives()
     test_reinject_genuine_revision_surfaces_evidence_lost()
     print("test_reinject OK")

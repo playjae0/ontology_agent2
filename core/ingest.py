@@ -181,21 +181,18 @@ def handle_entity(field, value, spec, ctx):
         _register(ctx, graph, nid, canonical, polar_surface, surface, prov)  # alias 누적
         return nid
 
-    # 신규(auto) 또는 불확실 → 되돌리기 쉬운 쪽: 둘 다 신규 생성 + 큐(명세 §7-5)
+    # 신규(auto) 또는 불확실 → 되돌리기 쉬운 쪽: 둘 다 신규 생성(명세 §7-5).
+    # 검토 큐(auto_node/uncertain_match)는 여기서 넣지 않는다 — build 말미 sweep_review_nodes가
+    # status=auto 노드 전수로 재작성(G3, v1.14). 재인입 match 경로에서도 검토 항목이 증발하지 않게
+    # 큐를 노드 상태의 파생물로 만든다. 불확실은 노드에 표식(review)만 남겨 sweep이 kind를 구분한다.
     extra = {}
     if electrode:
         extra["electrode_type"] = electrode
+    if result["type"] == "uncertain":
+        extra["review"] = {"uncertain": True, "candidates": [c["id"] for c in cands]}
     nid = graph.add_node(canonical, category, layer=target_layer,
                          status="auto", provenance=prov, **extra)
     _register(ctx, graph, nid, canonical, polar_surface, surface, prov)
-    if result["type"] == "uncertain":
-        ctx.enqueue("uncertain_match",
-                    {"surface": canonical, "node": nid, "candidates": [c["id"] for c in cands]},
-                    reason="판정 불확실 — 신규 생성(되돌리기 쉬운 쪽)")
-    else:
-        ctx.enqueue("auto_node",
-                    {"surface": canonical, "node": nid, "category": category},
-                    reason="신규 개체 자동 생성(status=auto)")
     return nid
 
 
@@ -628,6 +625,32 @@ def sweep_evidence_lost(graphs, queue, doc_id, parsed_at=""):
             if e.get("status") != "deleted_by_user" and not e["provenance"]:
                 queue.add("evidence_lost", {"edge": [e["src"], e["rel"], e["dst"]]},
                           doc_id, "엣지 근거 소멸 — provenance 0", parsed_at)
+
+
+def sweep_review_nodes(graphs, queue, doc_id, parsed_at=""):
+    """status=auto 노드를 auto_node/uncertain_match 큐로 self-heal 재작성 (G3, v1.14).
+
+    이 두 kind는 "문서 발자국"이 아니라 **노드 상태(status=auto)의 그림자**다 — reinject의 remove_doc가
+    걷은 뒤 재인입이 match 경로면 재적재가 안 돼 검토 항목이 증발한다(2차 검수 G3). build 말미에
+    status=auto 노드 전수로 재작성 → 큐가 노드 상태의 파생물이 되어 재인입에도 검토 목록 보존(§16.1
+    "수정 재료를 빠짐없이 기록"). evidence_lost sweep과 같은 패턴. 불확실은 노드 review 표식으로 구분.
+    (doc_id는 이 재평가를 유발한 build의 것 — self-heal 큐의 공통 특성, payload.node로 대상 추적.)
+    """
+    queue.remove(lambda i: i["kind"] in ("auto_node", "uncertain_match"))
+    for layer, g in graphs.items():
+        for nid, n in g.nodes.items():
+            if n.get("status") != "auto":
+                continue
+            review = n.get("review")
+            if review and review.get("uncertain"):
+                queue.add("uncertain_match",
+                          {"surface": n["canonical"], "node": nid,
+                           "candidates": list(review.get("candidates", []))},
+                          doc_id, "판정 불확실 — 신규 생성(되돌리기 쉬운 쪽)", parsed_at)
+            else:
+                queue.add("auto_node",
+                          {"surface": n["canonical"], "node": nid, "category": n["category"]},
+                          doc_id, "신규 개체 자동 생성(status=auto)", parsed_at)
 
 
 def _filt_attrs(attrs, belongs):

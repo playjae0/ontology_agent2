@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -59,5 +60,7 @@ class Dictionary:
         p = Path(path) if path else self.path
         if p is None:
             raise ValueError("dictionary.save: 경로 없음")
-        Path(p).parent.mkdir(parents=True, exist_ok=True)
-        Path(p).write_text(json.dumps(self.entries, ensure_ascii=False, indent=2), encoding="utf-8")
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(p.name + ".tmp")               # 원자적 저장(F14) — tmp+os.replace
+        tmp.write_text(json.dumps(self.entries, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, p)

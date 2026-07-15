@@ -53,6 +53,28 @@
 - **(나) 재인입 노드 중복+stale 큐**: KNOWN_ISSUES.md 기록, 단위 5(재인입 회수 규칙 정밀화)에서 구현. 단위 1a~3 산출물엔 영향 없음(문서 1회 인입).
 - core self-heal 수정은 층 어휘 없음(config 구동) — config-only 성질 유지(quality 격리해도 process 파이프라인 정상).
 
+## Fable 2차 게이트 반영 — 플랫폼 착수 전 (2026-07-15)
+
+- **docs 정본**: 명세 v1.14 / 정의서 v1.8 / 구현문서 v1.13(사용자 교체본, 파일명 정본화·착수프롬프트 복원).
+  v1.14 = G1(F4 정본 세부공정 스코프) + G3(auto_node sweep) + F14(build 직렬) + G4 마감안 + G2(구현문서 회귀 정정).
+- **G3 — 검토 큐 증발 해소**: `core/ingest.sweep_review_nodes` 신설 — build 말미 status=auto 노드 전수로
+  auto_node/uncertain_match 재작성(evidence_lost sweep과 같은 self-heal 패턴). handle_entity의 인입 중
+  enqueue 제거, 불확실은 노드 `review` 표식으로 남겨 sweep이 kind 구분. **실측**: CP01 재인입 후
+  auto_node 큐 == status=auto 노드 수(14==14, 이전엔 49→35 증발), 3문서 반복 auto_node 49 고정(라운드1==2==3).
+  검증 `test_reinject.test_reinject_auto_node_survives`·`_uncertain_marker_survives`(matcher monkeypatch).
+- **F14 — build 직렬 + 원자적 저장**: 직렬 계약을 build.py docstring·README.md에 명문화(동시 build 금지,
+  호출부가 직렬화 보장). 개별 파일 저장을 원자적(tmp+`os.replace`)으로 — graph/store/dictionary 3곳.
+  프로세스 간 파일 락만 단위4 이연. **실측**: build 후 `.tmp` 잔존 0, 저장 파일 유효 JSON.
+  검증 `test_viz.test_atomic_save_no_tmp_leftover`.
+- **G6 — viz 극성 모양**: `sorted` → config `polarity.values` 순서(다른 축과 통일). ▲triangle=cathode
+  (주석·PROGRESS 서술과 일치). 이전엔 sorted라 ▲=anode였음.
+- **G1 — 코드 무변경, 문서 정합**: 명세가 세부공정 스코프(`노칭::노칭 정밀도`)로 교정돼 코드와 일치.
+  **단, 구현문서 §2.2 N0031 예시가 아직 설비 스코프(`cathode 노칭 프레스::노칭 정밀도`)로 남아 있어 교정**
+  (→ `노칭::cathode 노칭 정밀도`). ingest §3 서술의 옛 재인입·auto_node 문면도 3.5/G3에 맞게 동기화.
+- **G4 — KNOWN_ISSUES (사)로 유지**: 명세 v1.14가 마감안 확정(부모 미해소 시 스코프 노드 후보 제외),
+  mock 미발현이라 실데이터 파일럿 전 구현. G5·G7·G8은 (아)로 이연.
+- **테스트 11개 파일 통과** + 재인입 테스트 2건 추가(auto_node·uncertain) + 원자적 저장 1건.
+
 ## 단위 3.5 — 재인입 회수 ②(사전 보존) + 노드 유일성 불변식(P4) (2026-07-15)
 
 - **docs v1.13/v1.12 정본 반영**: 사용자가 명세 v1.13·구현문서 v1.12 교체본 투입(파일명 " (14)/(7)" →
